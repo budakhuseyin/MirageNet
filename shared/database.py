@@ -2,6 +2,7 @@ import sqlite3
 import os
 from datetime import datetime
 
+# Dosya yollarını garantiye alıyoruz
 DB_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 DB_PATH = os.path.join(DB_DIR, 'miragenet.db')
 
@@ -11,8 +12,6 @@ if not os.path.exists(DB_DIR):
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    
-    # user_agent sütununu ekledik
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS attack_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -22,43 +21,39 @@ def init_db():
             module TEXT,
             username TEXT,
             password TEXT,
-            user_agent TEXT
+            user_agent TEXT,
+            session_id TEXT
         )
     ''')
     conn.commit()
     conn.close()
     print("[*] Database initialized at:", DB_PATH)
 
-# Parametrelere user_agent eklendi
-def log_attack(ip_address, port, module, username, password, user_agent):
+def log_attack(ip_address, port, module, username, password, user_agent, session_id):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
-    # INSERT sorgusuna user_agent dahil edildi
+    # 8 parametreyi de buraya ekledik (session_id dahil)
     cursor.execute('''
-        INSERT INTO attack_logs (timestamp, ip_address, port, module, username, password, user_agent)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    ''', (timestamp, ip_address, port, module, username, password, user_agent))
+        INSERT INTO attack_logs (timestamp, ip_address, port, module, username, password, user_agent, session_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (timestamp, ip_address, port, module, username, password, user_agent, session_id))
     
     conn.commit()
     conn.close()
-    print(f"[+] Attack logged to database from IP: {ip_address}")
+    print(f"[+] Attack logged | Session: {session_id} | IP: {ip_address}")
 
-
-def get_attempt_count(ip_address):
-    """Belirli bir IP'nin kaç adet giriş denemesi yaptığını döndürür."""
+def get_attempt_count(ip_address, session_id):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('''
         SELECT COUNT(*) FROM attack_logs 
-        WHERE ip_address = ? AND module = 'HTTP-WP-Login'
-    ''', (ip_address,))
+        WHERE ip_address = ? AND session_id = ? AND module = 'HTTP-WP-Login'
+    ''', (ip_address, session_id))
     count = cursor.fetchone()[0]
     conn.close()
     return count
-
 
 if __name__ == "__main__":
     init_db()
