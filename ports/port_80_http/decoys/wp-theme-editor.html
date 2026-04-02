@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <meta charset="UTF-8" />
+    <title>Edit Themes &lsaquo; WordPress</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f1f1f1; color: #3c434a; margin: 0; }
+        .header { background: #1d2327; color: #fff; padding: 10px 20px; font-size: 14px; }
+        .container { margin: 20px auto; width: 90%; max-width: 1200px; background: #fff; padding: 20px; border: 1px solid #c3c4c7; }
+        h1 { font-size: 23px; font-weight: 400; margin-top: 0; }
+        textarea { width: 100%; height: 400px; font-family: Consolas, Monaco, monospace; font-size: 13px; padding: 10px; background: #f6f7f7; border: 1px solid #8c8f94; }
+        .button { background: #2271b1; color: #fff; border: none; padding: 8px 16px; cursor: pointer; border-radius: 3px; font-size: 14px; margin-top: 15px;}
+        .button:hover { background: #135e96; }
+        .notice { background: #fff; border-left: 4px solid #00a32a; padding: 10px 15px; margin-bottom: 15px; display: none; }
+    </style>
+</head>
+<body>
+    <div class="header">WordPress Admin - Theme Editor</div>
+    <div class="container">
+        <h1>Edit Theme: functions.php</h1>
+        
+        <form action="/wp-admin/theme-editor.php" method="post">
+            <textarea name="newcontent" id="newcontent">
+<?php
+// Default WordPress Theme Functions
+function my_theme_enqueue_styles() {
+    wp_enqueue_style( 'style', get_stylesheet_uri() );
+}
+add_action( 'wp_enqueue_scripts', 'my_theme_enqueue_styles' );
+?>
+            </textarea>
+            <input type="submit" class="button" value="Update File" />
+        </form>
+    </div>
+</body>
+</html>

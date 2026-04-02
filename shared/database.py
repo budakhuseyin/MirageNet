@@ -46,5 +46,19 @@ def log_attack(ip_address, port, module, username, password, user_agent):
     conn.close()
     print(f"[+] Attack logged to database from IP: {ip_address}")
 
+
+def get_attempt_count(ip_address):
+    """Belirli bir IP'nin kaç adet giriş denemesi yaptığını döndürür."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT COUNT(*) FROM attack_logs 
+        WHERE ip_address = ? AND module = 'HTTP-WP-Login'
+    ''', (ip_address,))
+    count = cursor.fetchone()[0]
+    conn.close()
+    return count
+
+
 if __name__ == "__main__":
     init_db()
