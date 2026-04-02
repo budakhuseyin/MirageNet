@@ -37,27 +37,30 @@ class HoneypotHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length).decode('utf-8')
             
-            # Veriyi burada ayrıştırıp parsed_data değişkenine atıyoruz
             parsed_data = urllib.parse.parse_qs(post_data)
-            
-            # Değişkenleri güvenli bir şekilde çekiyoruz
             username = parsed_data.get('log', [''])[0]
             password = parsed_data.get('pwd', [''])[0]
+            
+            # --- YENİ EKLENEN KISIM ---
+            # HTTP başlıklarından User-Agent bilgisini çekiyoruz (Yoksa 'Unknown' yazacak)
+            user_agent = self.headers.get('User-Agent', 'Unknown')
             
             print("-" * 50)
             print("[***] TRAPPED! Captured Credentials:")
             print(f"Username      : {username}")
             print(f"Password      : {password}")
+            print(f"User-Agent    : {user_agent}") # Ekrana basıyoruz
             print("-" * 50)
             
-            # Veritabanına kaydediyoruz
             log_attack(
                 ip_address=self.client_address[0],
                 port=PORT,
                 module="HTTP-WP-Login",
                 username=username,
-                password=password
+                password=password,
+                user_agent=user_agent # Veri tabanına gönderiyoruz
             )
+            # --------------------------
             
             self._set_headers(200)
             with open(DECOY_PATH, "rb") as file:
