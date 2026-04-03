@@ -20,3 +20,8 @@ Thumbs.db
 # IDEs
 .vscode/
 .idea/
+
+# others
+
+/rsa_key
+.pub

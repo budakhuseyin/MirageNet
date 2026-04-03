@@ -12,6 +12,7 @@ if not os.path.exists(DB_DIR):
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
+    
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS attack_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -22,27 +23,27 @@ def init_db():
             username TEXT,
             password TEXT,
             user_agent TEXT,
-            session_id TEXT
+            session_id TEXT,
+            event_data TEXT,     -- Girdi (Komut, Dosya adı vb.)
+            response_data TEXT,  -- Çıktı (Sistemin verdiği cevap)
+            country_code TEXT    -- Harita için (TR, US vb.)
         )
     ''')
     conn.commit()
     conn.close()
-    print("[*] Database initialized at:", DB_PATH)
 
-def log_attack(ip_address, port, module, username, password, user_agent, session_id):
+def log_attack(ip_address, port, module, username, password, user_agent, session_id, event_data="", response_data="", country_code="??"):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
-    # 8 parametreyi de buraya ekledik (session_id dahil)
     cursor.execute('''
-        INSERT INTO attack_logs (timestamp, ip_address, port, module, username, password, user_agent, session_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (timestamp, ip_address, port, module, username, password, user_agent, session_id))
+        INSERT INTO attack_logs (timestamp, ip_address, port, module, username, password, user_agent, session_id, event_data, response_data, country_code)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (timestamp, ip_address, port, module, username, password, user_agent, session_id, event_data, response_data, country_code))
     
     conn.commit()
     conn.close()
-    print(f"[+] Attack logged | Session: {session_id} | IP: {ip_address}")
 
 def get_attempt_count(ip_address, session_id, module):
     """Belirli bir IP, Session ve MODÜL kombinasyonunun deneme sayısını döndürür."""
