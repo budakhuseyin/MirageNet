@@ -4,6 +4,8 @@ import paramiko
 import sys
 import os
 import uuid
+import shlex                  
+from datetime import datetime 
 
 # Proje kök dizinine erişim ayarları
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -77,51 +79,332 @@ def handle_connection(client_sock, client_addr):
         chan.close()
         return
 
-    # --- TİYATRO BAŞLIYOR: SAHTE TERMİNAL ---
+    # --- SİSTEM DURUMU (STATE) ---
+    current_path = "/root"
+    command_history = []
+    
+    # SAHTE DOSYA SİSTEMİ İÇERİĞİ
+    vfs = {
+        "/root/backup.sql": "-- MySQL dump 10.13\n-- Host: localhost\n-- Database: miragenet_db\nINSERT INTO `users` VALUES (1,'admin','$2y$10$vI8..');\n",
+        "/root/.bash_history": "ls -la\ncd /etc\ncat passwd\nssh 192.168.1.50\nexit\n",
+        "/root/web-app/config.php": "<?php\n$db_user = 'root';\n$db_pass = 'S3cr3t_P@ss!';\n?>\n",
+        "/root/web-app/index.php": "<?php echo 'MirageNet Web App is running!'; ?>\n",
+        "/etc/passwd": "root:x:0:0:root:/root:/bin/bash\ndaemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin\nbin:x:2:2:bin:/bin:/usr/sbin/nologin\nsshd:x:100:65534::/run/sshd:/usr/sbin/nologin\nmysql:x:101:101:MySQL Server,,,:/nonexistent:/bin/false\n",
+        "/etc/shadow": "root:$6$v/9A9.zU$r5lU..../:18500:0:99999:7:::\ndaemon:*:18500:0:99999:7:::\nbin:*:18500:0:99999:7:::\n",
+        "/etc/os-release": 'PRETTY_NAME="Ubuntu 22.04.3 LTS"\nNAME="Ubuntu"\nVERSION_ID="22.04"\nID=ubuntu\nID_LIKE=debian\n',
+        "/etc/issue": "Ubuntu 22.04.3 LTS \\n \\l\n",
+        "/etc/hostname": "ubuntu\n",
+        "/etc/hosts": "127.0.0.1\tlocalhost\n127.0.1.1\tubuntu\n::1\tlocalhost ip6-localhost ip6-loopback\n",
+        "/proc/meminfo": "MemTotal:        8174548 kB\nMemFree:         4123564 kB\nMemAvailable:    6231456 kB\nBuffers:          210456 kB\nCached:          2345672 kB\nSwapTotal:       2097148 kB\nSwapFree:        2097148 kB\n",
+        "/proc/cpuinfo": "processor\t: 0\nvendor_id\t: GenuineIntel\ncpu family\t: 6\nmodel\t\t: 142\nmodel name\t: Intel(R) Xeon(R) CPU E5-2676 v3 @ 2.40GHz\nstepping\t: 2\nmicrocode\t: 0x43\ncpu MHz\t\t: 2400.000\ncache size\t: 30720 KB\ncores\t\t: 2\n",
+        "/proc/version": "Linux version 5.15.0-84-generic (buildd@lcy02-amd64-077) (gcc (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0, GNU ld (GNU Binutils for Ubuntu) 2.38) #93-Ubuntu SMP Tue Sep 5 17:16:10 UTC 2023\n"
+    }
+
+    # Dinamik dizin seti oluştur
+    directories = {"/", "/root", "/etc", "/var", "/var/log", "/var/www", "/var/www/html", "/home", "/home/admin", "/bin", "/sbin", "/usr", "/usr/bin", "/tmp", "/dev", "/proc", "/sys", "/boot", "/root/web-app"}
+    
+    # Yardımcı Fonksiyonlar
+    def clean_path(path):
+        # Basit os.path.normpath benzeri temizleme
+        parts = path.split('/')
+        new_parts = []
+        for p in parts:
+            if not p or p == '.': continue
+            if p == '..':
+                if new_parts: new_parts.pop()
+            else:
+                new_parts.append(p)
+        return "/" + "/".join(new_parts)
+
+    def get_abs_path(p):
+        if p.startswith("/"): return clean_path(p)
+        return clean_path(f"{current_path}/{p}")
+
+    def list_dir(target_dir, show_hidden=False, long_format=False):
+        files = []
+        dirs = []
+        
+        # İçindekileri bul
+        for d in directories:
+            if d != target_dir and d.startswith(target_dir):
+                sub = d[len(target_dir):].strip('/')
+                if "/" not in sub and sub:
+                    dirs.append(sub)
+                    
+        for f in vfs.keys():
+            if f.startswith(target_dir):
+                sub = f[len(target_dir):].strip('/')
+                if "/" not in sub and sub:
+                    files.append(sub)
+
+        items = dirs + files
+        if show_hidden:
+            items = [".", ".."] + items
+        else:
+            items = [i for i in items if not i.startswith(".")]
+            
+        items = list(set(items))
+        items.sort()
+
+        if not items: return ""
+
+        if long_format:
+            output = f"total {len(items) * 4}\n"
+            now_str = datetime.now().strftime("%b %d %H:%M")
+            for item in items:
+                is_d = (item in dirs) or (item in [".", ".."])
+                perms = "drwxr-xr-x" if is_d else "-rw-r--r--"
+                size = "4096" if is_d else str(len(vfs.get(f"{target_dir}/{item}".replace("//","/"), "")) + 10)
+                output += f"{perms} 1 root root {size:>6} {now_str} {item}\n"
+            return output
+        else:
+            return "  ".join(items) + "\n"
+
+    # --- TİYATRO BAŞLIYOR ---
     chan.send("\r\nWelcome to Ubuntu 22.04.3 LTS (GNU/Linux 5.15.0-84-generic x86_64)\r\n\r\n")
+    chan.send(" * Documentation:  https://help.ubuntu.com\r\n")
+    chan.send(" * Management:     https://landscape.canonical.com\r\n")
+    chan.send(" * Support:        https://ubuntu.com/advantage\r\n\r\n")
+    chan.send("Last login: " + datetime.now().strftime("%a %b %d %H:%M:%S %Y") + " from 192.168.1.100\r\n")
     
     while True:
-        chan.send("root@ubuntu:~# ")
-        command = ""
-        while not command.endswith("\r"):
+        display_path = current_path.replace("/root", "~")
+        chan.send(f"root@ubuntu:{display_path}# ")
+        
+        command_line = ""
+        while not command_line.endswith("\r"):
             char = chan.recv(1024).decode('utf-8', errors='ignore')
             if not char: return
-            chan.send(char) # Echo back (Saldırganın yazdığını görmesi için)
-            command += char
+            
+            # Backspace handling
+            if char == '\x7f' or char == '\x08':
+                if len(command_line) > 0:
+                    command_line = command_line[:-1]
+                    chan.send('\x08 \x08')
+            elif char in ('\x03', '\x04'): # Ctrl+C, Ctrl+D
+                chan.send("^C\r\n")
+                command_line = ""
+                break
+            elif char.isprintable() or char == '\r':
+                chan.send(char)
+                command_line += char
         
-        command = command.strip()
+        if not command_line:
+            continue
+
+        full_cmd = command_line.strip()
+        if not full_cmd:
+            chan.send("\r\n")
+            continue
+
+        command_history.append(full_cmd)
+        
+        try:
+            parts = shlex.split(full_cmd)
+        except ValueError:
+            parts = full_cmd.split() # Fallback for unclosed quotes
+            
+        cmd = parts[0] if parts else ""
+        args = parts[1:] if len(parts) > 1 else []
+        
         chan.send("\r\n")
+        response = ""
+
+        # --- KOMUT İŞLEME MANTIĞI ---
         
-        if command in ["exit", "quit"]:
+        if cmd == "exit" or cmd == "quit":
+            chan.send("logout\r\n")
             chan.close()
             break
+
+        elif cmd == "clear":
+            response = "\x1b[2J\x1b[H"
+
+        elif cmd == "pwd":
+            response = f"{current_path}\n"
+
+        elif cmd == "whoami":
+            response = "root\n"
+
+        elif cmd == "id":
+            response = "uid=0(root) gid=0(root) groups=0(root)\n"
+
+        elif cmd == "uname":
+            flags = "".join([a.replace("-", "") for a in args if a.startswith("-")])
+            if "a" in flags:
+                response = "Linux ubuntu 5.15.0-84-generic #93-Ubuntu SMP Tue Sep 5 17:16:10 UTC 2023 x86_64 x86_64 x86_64 GNU/Linux\n"
+            elif "r" in flags:
+                response = "5.15.0-84-generic\n"
+            else:
+                response = "Linux\n"
+
+        elif cmd == "ps":
+            flags = "".join([a.replace("-", "") for a in args if a.startswith("-")])
+            if "a" in flags or "e" in flags or "x" in flags:
+                response = (
+                    "USER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND\n"
+                    "root           1  0.0  0.1 103292 11392 ?        Ss   Sep15   0:05 /sbin/init\n"
+                    "root           2  0.0  0.0      0     0 ?        S    Sep15   0:00 [kthreadd]\n"
+                    "root         893  0.0  0.0  12140  2480 ?        Ss   Sep15   0:00 sshd: /usr/sbin/sshd -D\n"
+                    "root        1234  0.0  0.0  14568  3892 ?        Ss   12:00   0:00 sshd: root@pts/0\n"
+                    "root        1235  0.0  0.0   7452  3412 pts/0    Ss   12:00   0:00 -bash\n"
+                    "root        9982  0.0  0.0   8940  3296 pts/0    R+   12:01   0:00 ps -aux\n"
+                )
+            else:
+                response = "    PID TTY          TIME CMD\n   1235 pts/0    00:00:00 bash\n   9982 pts/0    00:00:00 ps\n"
+
+        elif cmd in ["ifconfig", "ip"]:
+            response = (
+                "eth0: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500\n"
+                "        inet 172.31.25.10  netmask 255.255.240.0  broadcast 172.31.31.255\n"
+                "        inet6 fe80::42:acff:fe1f:190a  prefixlen 64  scopeid 0x20<link>\n"
+                "        ether 02:42:ac:1f:19:0a  txqueuelen 1000  (Ethernet)\n"
+                "        RX packets 15403241  bytes 1245032488 (1.2 GB)\n"
+                "        TX packets 1324141  bytes 34241412 (34.2 MB)\n\n"
+                "lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536\n"
+                "        inet 127.0.0.1  netmask 255.0.0.0\n"
+                "        inet6 ::1  prefixlen 128  scopeid 0x10<host>\n"
+                "        loop  txqueuelen 1000  (Local Loopback)\n"
+                "        RX packets 2341  bytes 184234 (184.2 KB)\n"
+                "        TX packets 2341  bytes 184234 (184.2 KB)\n"
+            )
+            
+        elif cmd == "df":
+            response = (
+                "Filesystem     1K-blocks    Used Available Use% Mounted on\n"
+                "/dev/sda1       40629144 1450230  39178914   4% /\n"
+                "tmpfs            4087276       0   4087276   0% /dev/shm\n"
+                "tmpfs             817456    1200    816256   1% /run\n"
+            )
+
+        elif cmd == "free":
+            response = (
+                "               total        used        free      shared  buff/cache   available\n"
+                "Mem:         8174548     1705312     4123564        1200     2345672     6231456\n"
+                "Swap:        2097148           0     2097148\n"
+            )
+
+        elif cmd == "history":
+            for idx, h_cmd in enumerate(command_history):
+                response += f" {idx+1:>4}  {h_cmd}\n"
+
+        elif cmd == "echo":
+            # Very basic echo
+            output = " ".join(args)
+            if ">" in output or ">>" in output:
+                # Mock write to file
+                op = ">>" if ">>" in output else ">"
+                text, path = output.split(op, 1)
+                text = text.strip().strip("'").strip('"')
+                path = get_abs_path(path.strip())
+                if op == ">" or path not in vfs:
+                    vfs[path] = text + "\n"
+                else:
+                    vfs[path] += text + "\n"
+            else:
+                response = " ".join(args).replace('"', '').replace("'", "") + "\n"
+
+        elif cmd == "touch":
+            if args:
+                path = get_abs_path(args[0])
+                if path not in vfs:
+                    vfs[path] = ""
+
+        elif cmd == "rm":
+            if args:
+                path = get_abs_path(args[-1]) # ignores flags for now
+                if path in vfs:
+                    del vfs[path]
+                elif path in directories:
+                    response = f"rm: cannot remove '{args[-1]}': Is a directory\n"
+                else:
+                    response = f"rm: cannot remove '{args[-1]}': No such file or directory\n"
+
+        elif cmd == "mkdir":
+            if args:
+                path = get_abs_path(args[0])
+                directories.add(path)
+
+        elif cmd == "ls":
+            flags = "".join([a.replace("-", "") for a in args if a.startswith("-")])
+            targets = [a for a in args if not a.startswith("-")]
+            if not targets: targets = ["."]
+            
+            show_a = "a" in flags
+            show_l = "l" in flags
+            
+            for target in targets:
+                target_path = get_abs_path(target)
+                if target_path in directories:
+                    if len(targets) > 1: response += f"{target}:\n"
+                    dir_content = list_dir(target_path, show_hidden=show_a, long_format=show_l)
+                    response += dir_content
+                elif target_path in vfs:
+                    if show_l:
+                        now_str = datetime.now().strftime("%b %d %H:%M")
+                        size = str(len(vfs[target_path]))
+                        name = target_path.split("/")[-1]
+                        response += f"-rw-r--r-- 1 root root {size:>6} {now_str} {name}\n"
+                    else:
+                        response += f"{target}\n"
+                else:
+                    response += f"ls: cannot access '{target}': No such file or directory\n"
+
+        elif cmd == "cd":
+            target = args[0] if args else "~"
+            if target == "~":
+                current_path = "/root"
+            else:
+                target_path = get_abs_path(target)
+                if target_path in directories:
+                    current_path = target_path
+                elif target_path in vfs:
+                    response = f"-bash: cd: {target}: Not a directory\n"
+                else:
+                    response = f"-bash: cd: {target}: No such file or directory\n"
+
+        elif cmd == "cat":
+            if not args:
+                pass # usually waits for stdin, we just do nothing
+            else:
+                for target in args:
+                    target_path = get_abs_path(target)
+                    if target_path in directories:
+                        response += f"cat: {target}: Is a directory\n"
+                    elif target_path in vfs:
+                        response += vfs[target_path]
+                    else:
+                        response += f"cat: {target}: No such file or directory\n"
+
+        elif cmd in ["wget", "curl"]:
+            url = args[0] if args else "unknown"
+            filename = url.split("/")[-1] if "/" in url else "index.html"
+            vfs[get_abs_path(filename)] = "Downloaded content from " + url + "\n"
+            response = f"--{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}--  {url}\n"
+            response += "Resolving host... connected.\nHTTP request sent, awaiting response... 200 OK\n"
+            response += f"Saving to: '{filename}'\n"
+
+        elif cmd in ["sudo", "su"]:
+            response = "su: Authentication failure\n" if cmd == "su" else "[sudo] password for root: \n"
         
-        # --- KOMUT SİMÜLASYON MANTIĞI ---
-        response = ""
-        
-        if command == "whoami":
-            response = "root\r\n"
-        elif command == "ls":
-            response = "Desktop  Documents  Downloads  snap  web-app  backup.sql\r\n"
-        elif command == "id":
-            response = "uid=0(root) gid=0(root) groups=0(root)\r\n"
-        elif command == "uname -a":
-            response = "Linux ubuntu 5.15.0-84-generic #93-Ubuntu SMP Tue Sep 5 17:16:10 UTC 2023 x86_64 x86_64 GNU/Linux\r\n"
-        elif command == "cat /etc/passwd":
-            response = "root:x:0:0:root:/root:/bin/bash\ndaemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin\nbin:x:2:2:bin:/bin:/usr/sbin/nologin\n"
-        elif command.startswith("cd"):
-            response = "" # Başarılı geçmiş gibi sessiz kal
-        elif "sudo" in command:
-            response = "[sudo] password for root: \r\nSorry, try again.\r\n"
-        elif command == "":
-            response = ""
+        elif cmd in ["apt", "apt-get"]:
+            response = "Reading package lists... Done\nBuilding dependency tree... Done\nReading state information... Done\nE: Could not get lock /var/lib/dpkg/lock-frontend. It is held by process 1230 (unattended-upgr)\n"
+
+        elif cmd == "systemctl" or cmd == "service":
+            response = "System has not been booted with systemd as init system (PID 1). Can't operate.\n"
+            
+        elif cmd == "":
+            pass # just newline print
+
         else:
-            response = f"bash: {command}: command not found\r\n"
+            response = f"{cmd}: command not found\n"
 
-        # Çıktıyı gönder
-        chan.send(response)
+        # Change Unix newlines to Windows ones expected by SSH client
+        if response:
+            response = response.replace("\r\n", "\n").replace("\n", "\r\n")
+            chan.send(response)
 
-        # ADLİ BİLİŞİM KAYDI: Girdi ve Çıktıyı ayrı sütunlara logla
+        # ADLİ BİLİŞİM KAYDI
         log_attack(
             ip_address=client_addr[0],
             port=22,
@@ -130,9 +413,9 @@ def handle_connection(client_sock, client_addr):
             password="N/A",
             user_agent="SSH-Terminal",
             session_id=session_id,
-            event_data=command,      # Ne yazdı?
-            response_data=response,   # Ne cevap verdik?
-            country_code="??"
+            event_data=full_cmd,       # Girdiği komutun tamamı
+            response_data=response[:1000] + ("..." if len(response)>1000 else ""), # Truncate for DB
+            country_code="??"          
         )
 
 def start_server():
