@@ -23,5 +23,12 @@ Thumbs.db
 
 # others
 
-/rsa_key
-.pub
+# SSH Keys
+ports/port_22_ssh/rsa_key
+ports/port_22_ssh/rsa_key.pub
+
+# Database
+data/miragenet.db
+
+# Payloads
+data/payloads/*
