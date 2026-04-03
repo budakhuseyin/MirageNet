@@ -89,8 +89,9 @@ class HoneypotHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
             password = parsed_data.get('pwd', [''])[0]
             
             log_attack(self.client_address[0], PORT, "HTTP-WP-Login", username, password, user_agent, session_id)
-            attempt_count = get_attempt_count(self.client_address[0], session_id)
-            
+            # HTTP tarafı için "HTTP-WP-Login" modülünü gönderiyoruz
+            attempt_count = get_attempt_count(self.client_address[0], session_id, "HTTP-WP-Login")     
+                   
             if attempt_count >= 2: 
                 self.send_response(302)
                 self.send_header('Location', '/wp-admin/') 

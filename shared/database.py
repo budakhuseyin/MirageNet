@@ -44,13 +44,15 @@ def log_attack(ip_address, port, module, username, password, user_agent, session
     conn.close()
     print(f"[+] Attack logged | Session: {session_id} | IP: {ip_address}")
 
-def get_attempt_count(ip_address, session_id):
+def get_attempt_count(ip_address, session_id, module):
+    """Belirli bir IP, Session ve MODÜL kombinasyonunun deneme sayısını döndürür."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('''
         SELECT COUNT(*) FROM attack_logs 
-        WHERE ip_address = ? AND session_id = ? AND module = 'HTTP-WP-Login'
-    ''', (ip_address, session_id))
+        WHERE ip_address = ? AND session_id = ? AND module = ?
+    ''', (ip_address, session_id, module))
+    
     count = cursor.fetchone()[0]
     conn.close()
     return count
