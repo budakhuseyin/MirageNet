@@ -167,27 +167,36 @@ def handle_connection(client_sock, client_addr):
     chan.send(" * Support:        https://ubuntu.com/advantage\r\n\r\n")
     chan.send("Last login: " + datetime.now().strftime("%a %b %d %H:%M:%S %Y") + " from 192.168.1.100\r\n")
     
+    # Zombi bağlantıları önlemek için boşta bekleme süresi (5 dakika)
+    chan.settimeout(300.0)
+    
     while True:
         display_path = current_path.replace("/root", "~")
         chan.send(f"root@ubuntu:{display_path}# ")
         
         command_line = ""
         while not command_line.endswith("\r"):
-            char = chan.recv(1024).decode('utf-8', errors='ignore')
-            if not char: return
+            chunk = chan.recv(1024).decode('utf-8', errors='ignore')
+            if not chunk: return
             
-            # Backspace handling
-            if char == '\x7f' or char == '\x08':
-                if len(command_line) > 0:
-                    command_line = command_line[:-1]
-                    chan.send('\x08 \x08')
-            elif char in ('\x03', '\x04'): # Ctrl+C, Ctrl+D
-                chan.send("^C\r\n")
-                command_line = ""
-                break
-            elif char.isprintable() or char == '\r':
-                chan.send(char)
-                command_line += char
+            for char in chunk:
+                # Backspace handling
+                if char == '\x7f' or char == '\x08':
+                    if len(command_line) > 0:
+                        command_line = command_line[:-1]
+                        chan.send('\x08 \x08')
+                elif char in ('\x03', '\x04'): # Ctrl+C, Ctrl+D
+                    chan.send("^C\r\n")
+                    command_line = ""
+                    break
+                elif char.isprintable() or char == '\r' or char == '\n':
+                    if char == '\n':
+                        char = '\r'
+                    chan.send(char)
+                    command_line += char
+                    
+                    if char == '\r':
+                        break
         
         if not command_line:
             continue
@@ -413,7 +422,7 @@ def handle_connection(client_sock, client_addr):
             password="N/A",
             user_agent="SSH-Terminal",
             session_id=session_id,
-            event_data=full_cmd,       # Girdiği komutun tamamı
+            event_data=full_cmd[:1000] + ("..." if len(full_cmd)>1000 else ""),       # Girdiği komut sınırı
             response_data=response[:1000] + ("..." if len(response)>1000 else ""), # Truncate for DB
             country_code="??"          
         )

@@ -108,7 +108,21 @@ class HoneypotHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         print(f"[!] POST Request: {self.client_address[0]} [SID: {session_id}] -> {self.path}")
         user_agent = self.headers.get('User-Agent', 'Unknown')
         content_length = int(self.headers.get('Content-Length', 0))
-        post_data = self.rfile.read(content_length).decode('utf-8')
+        
+        # Kötü niyetli büyük dosya upload'larına karşı disk şişmesini engelle (Maks 5 MB)
+        MAX_PAYLOAD_SIZE = 5 * 1024 * 1024
+        if content_length > MAX_PAYLOAD_SIZE:
+            log_attack(
+                ip_address=self.client_address[0], port=80, module="HTTP-WP-Shell-Upload", 
+                username="N/A", password="N/A", user_agent=user_agent, session_id=session_id,
+                event_data=f"POST {self.path} (Payload too large: {content_length} bytes)", 
+                response_data="HTTP 413 Payload Too Large", country_code="??"
+            )
+            self._set_headers(413, session_id=session_id)
+            self.wfile.write(b"<h1>413 Payload Too Large</h1>")
+            return
+            
+        post_data = self.rfile.read(content_length).decode('utf-8', errors='ignore')
         parsed_data = urllib.parse.parse_qs(post_data)
 
         if "wp-login.php" in self.path:
@@ -117,7 +131,8 @@ class HoneypotHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
             
             attempt_count = get_attempt_count(self.client_address[0], session_id, "HTTP-WP-Login")     
             
-            if attempt_count >= 2: 
+            # SSH tarafı ile mantığı 2. denemede girebilecek şekilde eşitledik (0 endeksinden >=1)
+            if attempt_count >= 1: 
                 # Başarılı Giriş Logu
                 log_attack(
                     ip_address=self.client_address[0], port=80, module="HTTP-WP-Login", 
@@ -159,7 +174,7 @@ class HoneypotHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
             self._set_headers(200, session_id=session_id)
             self.wfile.write(b"<h1>File edited successfully.</h1> <a href='/wp-admin/theme-editor.php'>Go back</a>")
 
-with socketserver.TCPServer(("0.0.0.0", PORT), HoneypotHTTPRequestHandler) as httpd:
+with socketserver.ThreadingTCPServer(("0.0.0.0", PORT), HoneypotHTTPRequestHandler) as httpd:
     print(f"[*] MirageNet HTTP Sensor listening on Port: {PORT}")
     try:
         httpd.serve_forever()
