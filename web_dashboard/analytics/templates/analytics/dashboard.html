@@ -277,7 +277,8 @@
             <div id="session-list"
                  hx-get="/sessions-poll/"
                  hx-trigger="every 3s"
-                 hx-swap="innerHTML">
+                 hx-swap="innerHTML"
+                 hx-vals="js:{last_id: window.lastKnownAttackId || 0}">
                 {% include 'analytics/partials/session_list.html' %}
             </div>
         </div>
@@ -378,15 +379,16 @@
         });
 
         // Global newAttack event dinleyici (HTMX'ten gelen datayi yakalar)
+        window.lastKnownAttackId = window.lastKnownAttackId || 0;
         document.body.addEventListener('newAttack', function (evt) {
             var data = evt.detail;
-            console.log("🔥 [DEBUG] newAttack event yakalandi! Veri:", data);
-            
-            if (!data) return;
-            if (data.lat === undefined || data.lon === undefined) return;
+            if (!data || data.lat === undefined || data.lon === undefined) return;
+            if (data.lat === 0 && data.lon === 0) return; // Koordinatsiz kayitlari atla
             if (!window.mirageMap) return;
-            
-            console.log("✅ [DEBUG] Haritaya ekleniyor:", data.ip, data.lat, data.lon);
+
+            // Bir sonraki poll'a gondermek icin son id'yi guncelle
+            if (data.id) window.lastKnownAttackId = data.id;
+
             addRadarPulse(window.mirageMap, Number(data.lat), Number(data.lon), data.ip);
         });
 

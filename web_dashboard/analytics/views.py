@@ -26,25 +26,35 @@ def session_details(request, session_id):
 def session_list_partial(request):
     recent_sessions = AttackLog.objects.values('session_id', 'ip_address', 'port', 'latitude', 'longitude').annotate(
         log_count=Count('id'),
-        last_seen=Max('timestamp')
+        last_seen=Max('timestamp'),
+        last_id=Max('id')
     ).order_by('-last_seen')[:20]
 
     response = render(request, 'analytics/partials/session_list.html', {'recent_sessions': recent_sessions})
-    
-    # En son saldırıyı al ve tarayıcıya "yeni saldırı var" sinyali gönder
+
+    # Sadece gerçekten YENİ bir saldırı varsa radar eventi gönder
     if recent_sessions.exists():
         latest = recent_sessions[0]
-        event_data = {
-            "newAttack": {
-                "lat": latest['latitude'],
-                "lon": latest['longitude'],
-                "ip": latest['ip_address']
+        lat = latest.get('latitude') or 0.0
+        lon = latest.get('longitude') or 0.0
+        last_id = latest.get('last_id', 0)
+
+        # Client'ın gönderdiği son bilinen ID ile karşılaştır
+        client_last_id = int(request.GET.get('last_id', 0))
+
+        if last_id > client_last_id and lat != 0.0 and lon != 0.0:
+            event_data = {
+                "newAttack": {
+                    "id": last_id,
+                    "lat": lat,
+                    "lon": lon,
+                    "ip": latest['ip_address']
+                }
             }
-        }
-        # HTMX-Trigger başlığı ile tarayıcıdaki JS'i tetikliyoruz
-        response['HX-Trigger'] = json.dumps(event_data)
-    
+            response['HX-Trigger'] = json.dumps(event_data)
+
     return response
+
 
 
 def map_view(request):
