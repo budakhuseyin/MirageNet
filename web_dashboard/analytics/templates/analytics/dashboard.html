@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-bs-theme="dark">
+<html lang="en">
 
 <head>
     <meta charset="UTF-8">
@@ -7,104 +7,434 @@
     <title>MirageNet | SOC Dashboard</title>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
 
+    <!-- Leaflet — harita için, sadece World Map sekmesinde kullanılacak -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+
+        * {
+            box-sizing: border-box;
+        }
+
         body {
             background-color: #0d1117;
             color: #c9d1d9;
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            overflow: hidden;
         }
 
-        .sidebar {
-            background-color: #161b22;
-            height: 100vh;
-            overflow-y: auto;
-            border-right: 1px solid #30363d;
+        /* ── TOP NAVIGATION BAR ── */
+        .top-navbar {
+            height: 52px;
+            background: #161b22;
+            border-bottom: 1px solid #21262d;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            gap: 8px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
         }
+
+        .top-navbar .brand {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-right: 24px;
+        }
+
+        .top-navbar .brand-text {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #2ea043;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .top-navbar .brand-text span {
+            color: #58a6ff;
+        }
+
+        .nav-divider {
+            width: 1px;
+            height: 24px;
+            background: #30363d;
+            margin: 0 8px;
+        }
+
+        .nav-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            border-radius: 6px;
+            border: 1px solid transparent;
+            background: transparent;
+            color: #8b949e;
+            font-size: 0.82rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+
+        .nav-btn:hover {
+            background: #21262d;
+            color: #c9d1d9;
+            border-color: #30363d;
+        }
+
+        .nav-btn.active {
+            background: rgba(31, 111, 235, 0.12);
+            color: #58a6ff;
+            border-color: #1f6feb;
+            box-shadow: 0 0 10px rgba(31, 111, 235, 0.15);
+        }
+
+        .nav-btn.active-green {
+            background: rgba(46, 160, 67, 0.12);
+            color: #3fb950;
+            border-color: #2ea043;
+            box-shadow: 0 0 10px rgba(46, 160, 67, 0.15);
+        }
+
+        /* ── MAIN LAYOUT ── */
+        .layout-wrapper {
+            display: flex;
+            height: calc(100vh - 52px);
+            margin-top: 52px;
+        }
+
+        /* ── SIDEBAR ── */
+        .sidebar {
+            width: 280px;
+            min-width: 280px;
+            background-color: #161b22;
+            border-right: 1px solid #21262d;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .sidebar-header {
+            padding: 14px 16px;
+            border-bottom: 1px solid #21262d;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .sidebar-header h6 {
+            margin: 0;
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: #3fb950;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+        }
+
+        #session-list {
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        #session-list::-webkit-scrollbar { width: 4px; }
+        #session-list::-webkit-scrollbar-track { background: #0d1117; }
+        #session-list::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
 
         .session-card {
-            border-bottom: 1px solid #30363d;
-            padding: 12px;
+            border-bottom: 1px solid #21262d;
+            padding: 12px 16px;
             cursor: pointer;
-            transition: 0.2s;
+            transition: all 0.15s;
         }
 
         .session-card:hover {
-            background-color: #21262d;
+            background-color: #1c2128;
             border-left: 3px solid #2ea043;
-        }
-
-        .terminal-window {
-            background-color: #000;
-            color: #0f0;
-            font-family: 'Courier New', Courier, monospace;
-            padding: 20px;
-            border-radius: 8px;
-            height: 75vh;
-            overflow-y: auto;
-            border: 1px solid #333;
-            box-shadow: 0 0 15px rgba(0, 255, 0, 0.1);
-        }
-
-        .terminal-window::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        .terminal-window::-webkit-scrollbar-track {
-            background: #0d1117;
-            border-radius: 0 8px 8px 0;
-        }
-
-        .terminal-window::-webkit-scrollbar-thumb {
-            background: #238636;
-            border-radius: 4px;
-        }
-
-        .terminal-window::-webkit-scrollbar-thumb:hover {
-            background: #2ea043;
         }
 
         .badge-ssh {
             background-color: #238636;
             color: white;
+            font-size: 0.7rem;
+            padding: 2px 7px;
+            border-radius: 4px;
         }
 
         .badge-http {
             background-color: #1f6feb;
             color: white;
+            font-size: 0.7rem;
+            padding: 2px 7px;
+            border-radius: 4px;
         }
+
+        /* ── MAIN CONTENT ── */
+        #main-content {
+            flex: 1;
+            overflow: auto;
+            padding: 20px 24px;
+        }
+
+        #main-content::-webkit-scrollbar { width: 6px; }
+        #main-content::-webkit-scrollbar-track { background: #0d1117; }
+        #main-content::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
+
+        /* ── TERMINAL ── */
+        .terminal-window {
+            background-color: #010409;
+            color: #3fb950;
+            font-family: 'Courier New', Courier, monospace;
+            padding: 20px;
+            border-radius: 10px;
+            height: calc(100vh - 110px);
+            overflow-y: auto;
+            border: 1px solid #21262d;
+            box-shadow: 0 0 20px rgba(63, 185, 80, 0.07);
+        }
+
+        .terminal-window::-webkit-scrollbar { width: 6px; }
+        .terminal-window::-webkit-scrollbar-track { background: #010409; }
+        .terminal-window::-webkit-scrollbar-thumb { background: #238636; border-radius: 4px; }
     </style>
 </head>
 
 <body>
-    <div class="container-fluid">
-        <div class="row">
 
-            <div class="col-md-3 sidebar p-0">
-                <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
-                    <h5 class="m-0 text-success">📡 Live Threats</h5>
-                    <span class="badge bg-secondary">Polled via HTMX</span>
-                </div>
-
-                <div id="session-list" hx-get="/sessions-poll/" hx-trigger="every 3s" hx-swap="innerHTML">
-                    {% include 'analytics/partials/session_list.html' %}
-                </div>
-            </div>
-
-            <div class="col-md-9 p-4">
-                <h3 class="mb-4">Global Intelligence & Tracking</h3>
-
-                <div class="terminal-window" id="terminal-display">
-                    <div class="text-muted" style="font-family: Consolas, 'Courier New', monospace;">
-                        MirageNet OSINT & Terminal Surveillance System initialized.<br>
-                        Waiting for session selection...<br><br>
-                        > Select an active threat from the left panel to monitor their commands.
-                    </div>
-                </div>
-            </div>
-
+    <!-- TOP NAVIGATION BAR -->
+    <nav class="top-navbar">
+        <div class="brand">
+            <span style="font-size: 1.1rem;">🛡️</span>
+            <span class="brand-text">Mirage<span>Net</span></span>
         </div>
+        <div class="nav-divider"></div>
+
+        <button id="btn-terminal" class="nav-btn active-green"
+            onclick="setActive(this)"
+            hx-get="/view/terminal/"
+            hx-target="#main-content"
+            hx-swap="innerHTML">
+            📡 Live Terminal
+        </button>
+
+        <button id="btn-map" class="nav-btn"
+            onclick="setActive(this)"
+            hx-get="/view/map/"
+            hx-target="#main-content"
+            hx-swap="innerHTML">
+            🗺️ World Map
+        </button>
+
+        <button id="btn-stats" class="nav-btn"
+            onclick="setActive(this)"
+            hx-get="/view/stats/"
+            hx-target="#main-content"
+            hx-swap="innerHTML">
+            📊 Statistics
+        </button>
+
+        <button id="btn-forensics" class="nav-btn"
+            onclick="setActive(this)"
+            hx-get="/view/forensics/"
+            hx-target="#main-content"
+            hx-swap="innerHTML">
+            🕵️ Forensics
+        </button>
+
+        <button id="btn-settings" class="nav-btn"
+            onclick="setActive(this)"
+            hx-get="/view/settings/"
+            hx-target="#main-content"
+            hx-swap="innerHTML">
+            ⚙️ Settings
+        </button>
+    </nav>
+
+    <!-- MAIN LAYOUT -->
+    <div class="layout-wrapper">
+
+        <!-- SIDEBAR -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h6>📡 Live Threats</h6>
+                <span class="badge-http" style="font-size: 0.65rem;">HTMX Poll</span>
+            </div>
+            <div id="session-list"
+                 hx-get="/sessions-poll/"
+                 hx-trigger="every 3s"
+                 hx-swap="innerHTML">
+                {% include 'analytics/partials/session_list.html' %}
+            </div>
+        </div>
+
+        <!-- DYNAMIC MAIN CONTENT -->
+        <div id="main-content">
+            <!-- Varsayılan: Terminal Görünümü -->
+            <div class="terminal-window" id="terminal-display">
+                <div style="color: #8b949e; font-family: Consolas, 'Courier New', monospace;">
+                    MirageNet OSINT &amp; Terminal Surveillance System initialized.<br>
+                    Waiting for session selection...<br><br>
+                    &gt; Select an active threat from the left panel to monitor their commands.
+                </div>
+            </div>
+        </div>
+
     </div>
+
+    <script>
+        // Aktif nav butonunu yönet
+        var navBtns = document.querySelectorAll('.nav-btn');
+
+        function setActive(btn) {
+            navBtns.forEach(function (b) {
+                b.classList.remove('active', 'active-green');
+            });
+            // Harita ve terminal için farklı renk ayrımı
+            if (btn.id === 'btn-terminal') {
+                btn.classList.add('active-green');
+            } else {
+                btn.classList.add('active');
+            }
+        }
+
+        // Sol panelden session'a tıklandığında terminal view'ına dön
+        document.body.addEventListener('htmx:beforeRequest', function (evt) {
+            var target = evt.detail.elt;
+            if (target && target.classList.contains('session-card')) {
+                navBtns.forEach(function (b) {
+                    b.classList.remove('active', 'active-green');
+                });
+                document.getElementById('btn-terminal').classList.add('active-green');
+            }
+        });
+
+        // HTMX bir partial yüklediğinde harita DOM'daysa init et
+        document.body.addEventListener('htmx:afterSwap', function (evt) {
+            var mapDiv = document.getElementById('attack-map');
+
+            // Harita DOM'dan çıktı → eski referansı temizle ki geri dönünce yeniden init edilsin
+            if (!mapDiv) {
+                if (window.mirageMap) {
+                    window.mirageMap.remove();
+                    window.mirageMap = null;
+                }
+                return;
+            }
+
+            // Harita zaten init edilmiş ve container hala DOM'da → sadece boyut güncelle
+            if (window.mirageMap) {
+                setTimeout(function () { window.mirageMap.invalidateSize(); }, 50);
+                return;
+            }
+
+            // İlk kez init
+            var map = L.map('attack-map', { center: [20, 10], zoom: 2 });
+
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+                subdomains: 'abcd',
+                maxZoom: 19
+            }).addTo(map);
+
+            window.mirageMap = map;
+
+            // Tarihsel verileri haritaya dök
+            var histDiv = document.getElementById('map-historical-data');
+            if (histDiv) {
+                var rawData = histDiv.getAttribute('data-locations');
+                if (rawData) {
+                    try {
+                        var histData = JSON.parse(rawData);
+                        histData.forEach(function(item) {
+                            L.circleMarker([item.latitude, item.longitude], {
+                                radius: 4,
+                                fillColor: '#ff3333',
+                                color: 'transparent',
+                                weight: 0,
+                                opacity: 0.5,
+                                fillOpacity: 0.4
+                            }).bindPopup("<b>Geçmiş Saldırı</b><br>IP: " + item.ip_address).addTo(map);
+                        });
+                    } catch (err) {
+                        console.error("[DEBUG] Tarihsel veri parse hatası:", err);
+                    }
+                }
+            }
+        });
+
+        // Global newAttack event dinleyici (HTMX'ten gelen datayi yakalar)
+        document.body.addEventListener('newAttack', function (evt) {
+            var data = evt.detail;
+            console.log("🔥 [DEBUG] newAttack event yakalandi! Veri:", data);
+            
+            if (!data) return;
+            if (data.lat === undefined || data.lon === undefined) return;
+            if (!window.mirageMap) return;
+            
+            console.log("✅ [DEBUG] Haritaya ekleniyor:", data.ip, data.lat, data.lon);
+            addRadarPulse(window.mirageMap, Number(data.lat), Number(data.lon), data.ip);
+        });
+
+        function addRadarPulse(map, lat, lon, ip) {
+            var marker = L.circleMarker([lat, lon], {
+                radius: 4,
+                fillColor: '#ff3333',
+                color: '#ffffff',
+                weight: 1,
+                opacity: 1,
+                fillOpacity: 1
+            }).addTo(map);
+
+            marker.bindPopup(
+                '<div style="font-family: Consolas, monospace; font-size: 12px;">' +
+                '<span style="color: #ff4444;">&#x26A0; THREAT DETECTED</span><br>' +
+                '<b>IP:</b> ' + ip + '<br>' +
+                '<b>Lat/Lon:</b> ' + lat.toFixed(3) + ', ' + lon.toFixed(3) +
+                '</div>'
+            );
+
+            var pulse = L.circleMarker([lat, lon], {
+                radius: 4,
+                fillColor: 'transparent',
+                color: '#ff3333',
+                weight: 2,
+                opacity: 0.8,
+                fillOpacity: 0
+            }).addTo(map);
+
+            var intervalId = setInterval(function () {
+                var r = pulse.getRadius();
+                var op = pulse.options.opacity;
+                if (r < 50 && op > 0.02) {
+                    pulse.setRadius(r + 1.5);
+                    pulse.setStyle({ opacity: op - 0.018 });
+                } else {
+                    map.removeLayer(pulse);
+                    clearInterval(intervalId);
+                }
+            }, 40);
+
+            setTimeout(function () {
+                if (map.hasLayer(marker)) map.removeLayer(marker);
+            }, 15000);
+        }
+    </script>
+
 </body>
 
 </html>

@@ -1,0 +1,53 @@
+<style>
+    #attack-map {
+        height: calc(100vh - 130px);
+        width: 100%;
+        border-radius: 10px;
+        border: 1px solid #1f6feb;
+        box-shadow: 0 0 20px rgba(31, 111, 235, 0.25);
+        background: #0d1117;
+    }
+
+    .map-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 12px;
+    }
+
+    .map-header h5 {
+        color: #1f6feb;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        margin: 0;
+    }
+
+    .live-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #2ea043;
+        box-shadow: 0 0 6px #2ea043;
+        animation: blink 1.2s infinite;
+    }
+
+    @keyframes blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.2; }
+    }
+
+    .leaflet-container {
+        background: #0d1117 !important;
+    }
+</style>
+
+<div class="map-header">
+    <div class="live-dot"></div>
+    <h5>🌍 Real-Time Threat Map &mdash; Live Feed Active</h5>
+</div>
+
+<div id="attack-map"></div>
+
+<!-- JSON payload for map initialization logic in dashboard.html -->
+<div id="map-historical-data" data-locations="{{ historical_data_json|escape }}" style="display:none;"></div>

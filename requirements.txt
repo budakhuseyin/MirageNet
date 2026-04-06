@@ -1,2 +1,3 @@
 paramiko
 django
+geoip2

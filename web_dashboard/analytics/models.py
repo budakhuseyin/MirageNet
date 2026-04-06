@@ -12,7 +12,10 @@ class AttackLog(models.Model):
     session_id = models.CharField(max_length=8)
     event_data = models.TextField(null=True, blank=True)
     response_data = models.TextField(null=True, blank=True)
-    country_code = models.CharField(max_length=2, default="??")
+    country_code = models.CharField(max_length=5, default="??")
+    city = models.CharField(max_length=100, null=True, blank=True)
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
 
     class Meta:
         managed = False # Django bu tabloyu modifiye etmesin
