@@ -1,0 +1,26 @@
+{% for session in recent_sessions %}
+<div class="session-card"
+     hx-get="/session/{{ session.session_id }}/" 
+     hx-target="#terminal-display" 
+     hx-swap="innerHTML">
+     
+    <div class="d-flex justify-content-between align-items-center mb-1">
+        <strong class="text-white">{{ session.ip_address }}</strong>
+        <span class="badge {% if session.port == 22 %}badge-ssh{% else %}badge-http{% endif %}">
+            {% if session.port == 22 %}SSH{% else %}HTTP{% endif %}
+        </span>
+    </div>
+    
+    <div class="text-muted" style="font-size: 0.85rem;">
+        SID: <span class="text-warning">{{ session.session_id }}</span> | Events: {{ session.log_count }}
+    </div>
+    
+    <div class="text-secondary mt-1" style="font-size: 0.75rem;">
+        🕒 Son Görülme: {{ session.last_seen|date:"d M Y, H:i:s" }}
+    </div>
+</div>
+{% empty %}
+<div class="p-4 text-center text-muted">
+    <small>No attacks detected yet.</small>
+</div>
+{% endfor %}

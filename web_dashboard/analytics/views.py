@@ -19,3 +19,11 @@ def session_details(request, session_id):
     logs = AttackLog.objects.filter(session_id=session_id).order_by('timestamp')
     
     return render(request, 'analytics/partials/terminal.html', {'logs': logs, 'session_id': session_id})
+
+def session_list_partial(request):
+    recent_sessions = AttackLog.objects.values('session_id', 'ip_address', 'port').annotate(
+        log_count=Count('id'),
+        last_seen=Max('timestamp')
+    ).order_by('-last_seen')[:20]
+    
+    return render(request, 'analytics/partials/session_list.html', {'recent_sessions': recent_sessions})

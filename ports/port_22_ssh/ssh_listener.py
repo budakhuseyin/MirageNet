@@ -418,13 +418,20 @@ def handle_connection(client_sock, client_addr):
             country_code="??"          
         )
 
+
 def start_server():
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    
+    # 1. Önce portun yeniden kullanılabilirliğini ayarla
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.bind(('0.0.0.0', PORT))
+    
+    # 2. Sonra sadece BİR KEZ bind işlemini yap (Yukarıda PORT = 2222 tanımlı varsayıyorum)
+    sock.bind(('0.0.0.0', PORT)) 
+    
+    # 3. Dinlemeye başla
     sock.listen(100)
     print(f"[*] MirageNet SSH Sensor listening on Port: {PORT}")
-    
+
     while True:
         client, addr = sock.accept()
         threading.Thread(target=handle_connection, args=(client, addr)).start()
