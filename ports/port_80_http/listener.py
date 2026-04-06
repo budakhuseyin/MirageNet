@@ -15,7 +15,7 @@ from shared.database import log_attack, get_attempt_count
 
 PORT = 8080 
 
-# DOSYA YOLLARINI SABİTLEDİK (Hata Çözümü)
+# DOSYA YOLLARINI SABİTLEDİK
 DECOY_DIR = os.path.join(CURRENT_DIR, "decoys")
 DECOY_LOGIN = os.path.join(DECOY_DIR, "wp-login.html")
 DECOY_DASHBOARD = os.path.join(DECOY_DIR, "wp-dashboard.html")
@@ -51,15 +51,31 @@ class HoneypotHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
             self._set_headers(200, session_id=session_id)
             with open(DECOY_LOGIN, "rb") as file:
                 self.wfile.write(file.read())
+            # GET İsteklerini de logluyoruz (Sadece wp-login için)
+            log_attack(
+                ip_address=self.client_address[0], port=80, module="HTTP-GET",
+                username="N/A", password="N/A", user_agent=user_agent, session_id=session_id,
+                event_data=f"GET {self.path}", response_data="HTTP 200 OK - Served wp-login page", country_code="??"
+            )
 
         elif ".env" in self.path:
-            log_attack(self.client_address[0], PORT, "HTTP-DOT-ENV", "N/A", "Attempted download", user_agent, session_id)
-            self._set_headers(200, 'text/plain', session_id=session_id)
             fake_env = "DB_HOST=localhost\nDB_USER=root\nDB_PASS=S3cur3P@ssw0rd!\nAWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE"
+            # 11 Parametreli loglama
+            log_attack(
+                ip_address=self.client_address[0], port=80, module="HTTP-DOT-ENV", 
+                username="N/A", password="Attempted download", user_agent=user_agent, session_id=session_id,
+                event_data=f"GET {self.path}", response_data="HTTP 200 OK - Served Fake .env File", country_code="??"
+            )
+            self._set_headers(200, 'text/plain', session_id=session_id)
             self.wfile.write(fake_env.encode())
 
         elif "phpmyadmin" in self.path.lower():
-            log_attack(self.client_address[0], PORT, "HTTP-PHPMYADMIN", "N/A", "Scanning", user_agent, session_id)
+            # 11 Parametreli loglama
+            log_attack(
+                ip_address=self.client_address[0], port=80, module="HTTP-PHPMYADMIN", 
+                username="N/A", password="Scanning", user_agent=user_agent, session_id=session_id,
+                event_data=f"GET {self.path}", response_data="HTTP 403 Forbidden", country_code="??"
+            )
             self._set_headers(403, session_id=session_id)
             self.wfile.write(b"<h1>403 Forbidden: Access Denied</h1>")
 
@@ -67,11 +83,22 @@ class HoneypotHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
             self._set_headers(200, session_id=session_id)
             with open(DECOY_DASHBOARD, "rb") as file:
                 self.wfile.write(file.read())
+            log_attack(
+                ip_address=self.client_address[0], port=80, module="HTTP-GET",
+                username="N/A", password="N/A", user_agent=user_agent, session_id=session_id,
+                event_data=f"GET {self.path}", response_data="HTTP 200 OK - Served Admin Dashboard", country_code="??"
+            )
 
         elif "theme-editor.php" in self.path:
             self._set_headers(200, session_id=session_id)
             with open(DECOY_EDITOR, "rb") as file:
                 self.wfile.write(file.read())
+            log_attack(
+                ip_address=self.client_address[0], port=80, module="HTTP-GET",
+                username="N/A", password="N/A", user_agent=user_agent, session_id=session_id,
+                event_data=f"GET {self.path}", response_data="HTTP 200 OK - Served Theme Editor", country_code="??"
+            )
+
         else:
             self._set_headers(404, session_id=session_id)
             self.wfile.write(b"<h1>404 Not Found</h1>")
@@ -88,17 +115,29 @@ class HoneypotHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
             username = parsed_data.get('log', [''])[0]
             password = parsed_data.get('pwd', [''])[0]
             
-            log_attack(self.client_address[0], PORT, "HTTP-WP-Login", username, password, user_agent, session_id)
-            # HTTP tarafı için "HTTP-WP-Login" modülünü gönderiyoruz
             attempt_count = get_attempt_count(self.client_address[0], session_id, "HTTP-WP-Login")     
-                   
+            
             if attempt_count >= 2: 
+                # Başarılı Giriş Logu
+                log_attack(
+                    ip_address=self.client_address[0], port=80, module="HTTP-WP-Login", 
+                    username=username, password=password, user_agent=user_agent, session_id=session_id,
+                    event_data=f"POST /wp-login.php (User: {username}, Pass: {password})", 
+                    response_data="HTTP 302 Redirect -> /wp-admin/", country_code="??"
+                )
                 self.send_response(302)
                 self.send_header('Location', '/wp-admin/') 
                 self.send_header('Set-Cookie', f'mnet_sid={session_id}; Path=/; HttpOnly')
                 self.send_header('Set-Cookie', 'wordpress_logged_in=true; Path=/')
                 self.end_headers()
             else:
+                # Başarısız Giriş Logu
+                log_attack(
+                    ip_address=self.client_address[0], port=80, module="HTTP-WP-Login", 
+                    username=username, password=password, user_agent=user_agent, session_id=session_id,
+                    event_data=f"POST /wp-login.php (User: {username}, Pass: {password})", 
+                    response_data="HTTP 200 OK - Invalid Credentials Page", country_code="??"
+                )
                 self._set_headers(200, session_id=session_id)
                 with open(DECOY_LOGIN, "rb") as file:
                     self.wfile.write(file.read())
@@ -110,7 +149,13 @@ class HoneypotHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
             with open(payload_path, "w", encoding="utf-8") as f:
                 f.write(injected_code)
                 
-            log_attack(self.client_address[0], PORT, "HTTP-WP-Shell-Upload", "theme-editor.php", f"Saved: {payload_filename}", user_agent, session_id)
+            # Shell Upload Logu
+            log_attack(
+                ip_address=self.client_address[0], port=80, module="HTTP-WP-Shell-Upload", 
+                username="theme-editor.php", password=f"Saved: {payload_filename}", user_agent=user_agent, session_id=session_id,
+                event_data=f"POST /wp-admin/theme-editor.php (File Write)", 
+                response_data=f"HTTP 200 OK - File edited successfully. Payload saved as: {payload_filename}", country_code="??"
+            )
             self._set_headers(200, session_id=session_id)
             self.wfile.write(b"<h1>File edited successfully.</h1> <a href='/wp-admin/theme-editor.php'>Go back</a>")
 
