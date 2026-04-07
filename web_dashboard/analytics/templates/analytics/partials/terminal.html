@@ -1,4 +1,4 @@
-<div id="terminal-polling-wrapper" 
+<div class="terminal-window" id="terminal-polling-wrapper" 
      hx-get="/session/{{ session_id }}/" 
      hx-trigger="every 2s" 
      hx-swap="outerHTML">
@@ -43,7 +43,33 @@
     </div>
     
     <script>
-        var scrollTarget = document.getElementById("main-content");
-        if (scrollTarget) { scrollTarget.scrollTop = scrollTarget.scrollHeight; }
+        (function() {
+            var scroller = document.getElementById("terminal-polling-wrapper");
+            if (!scroller) return;
+
+            // Load last state globally
+            var wasNearBottom = true;
+            if (window.lastTerminalScrollTop !== undefined && window.lastTerminalScrollHeight !== undefined && window.lastTerminalSession === "{{ session_id }}") {
+                // Eger kaydirma (scrollHeight) icerisindeki toplam scroll boyutu eksi gorunen kisim, yukaridaysa
+                wasNearBottom = (window.lastTerminalScrollHeight - window.lastTerminalScrollTop - scroller.clientHeight) < 60;
+            } else {
+                window.lastTerminalSession = "{{ session_id }}";
+            }
+
+            // Scroll ayarini yap
+            if (wasNearBottom) {
+                // Kullanici en asagidaydi veya yeni tikladi, yeni loglar gelince en alta kaydir
+                scroller.scrollTop = scroller.scrollHeight;
+            } else {
+                // Kullanici kaydirma cubugunu yukari cekmis okuyor, pozisyonu koru
+                scroller.scrollTop = window.lastTerminalScrollTop;
+            }
+
+            // Yeni kaydirma hareketlerini dinle ve globale yaz
+            scroller.addEventListener('scroll', function() {
+                window.lastTerminalScrollTop = scroller.scrollTop;
+                window.lastTerminalScrollHeight = scroller.scrollHeight;
+            });
+        })();
     </script>
 </div>
