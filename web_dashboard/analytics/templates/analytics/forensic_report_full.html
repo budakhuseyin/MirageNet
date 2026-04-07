@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>MirageNet Forensic Report - {{ session_id }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { background-color: #050B14; color: #c9d1d9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px; }
+        .report-card { background: #0A1526; border: 1px solid #1B3358; border-radius: 8px; padding: 30px; margin-bottom: 20px; }
+        .terminal-box { font-family: Consolas, monospace; background: #03060b; border: 1px solid #12233D; padding: 15px; border-radius: 4px; overflow-y: auto; max-height: 800px; }
+        .text-malware { color: #ff7b72 !important; }
+        .text-brute { color: #bc8cff !important; }
+        .text-other { color: #e3b341 !important; }
+        .text-normal { color: #c9d1d9 !important; }
+        .border-malware { border-left: 3px solid #ff7b72 !important; }
+        .border-normal { border-left: 3px solid #1B3358 !important; }
+        @media print {
+            body { background: white; color: black; padding: 0; }
+            .report-card { border: 1px solid #ddd; background: white; }
+            .terminal-box { background: #f8f9fa; border: 1px solid #ddd; color: #333; max-height: none; }
+            .no-print { display: none; }
+            .text-malware { color: #d73a49 !important; }
+            .text-brute { color: #6f42c1 !important; }
+            .text-normal { color: #24292e !important; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center mb-4 no-print">
+            <h2 class="text-info"><i class="fas fa-shield-halved"></i> MirageNet Forensic Export</h2>
+            <button onclick="window.print()" class="btn btn-primary"><i class="fas fa-print"></i> Print to PDF</button>
+        </div>
+
+        <div class="report-card">
+            <div class="row">
+                <div class="col-8">
+                    <h1>Evidence Report</h1>
+                    <p class="text-muted">Session ID: <span class="text-info">{{ session_id }}</span></p>
+                    <p><strong>Target IP:</strong> {{ ip_address }}</p>
+                    <p><strong>Date Generated:</strong> {% now "Y-m-d H:i:s" %}</p>
+                </div>
+                <div class="col-4 text-end">
+                    <div class="p-3 border border-secondary rounded">
+                        <div class="small text-uppercase text-muted">Behavior Classification</div>
+                        <h4 class="{% if 'Malware' in behavior %}text-malware{% elif 'Brute' in behavior %}text-brute{% else %}text-other{% endif %}">
+                             {{ behavior }}
+                        </h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-4">
+                <div class="report-card">
+                    <h5 class="border-bottom pb-2"><i class="fas fa-user-secret"></i> Threat Intel</h5>
+                    <div class="mt-3">
+                        <p><strong>Reputation:</strong> <span class="{% if 'Critical' in reputation %}text-malware{% else %}text-other{% endif %}">{{ reputation }}</span></p>
+                        <p><strong>Attacker Signature:</strong><br><small class="text-info">{{ signature }}</small></p>
+                    </div>
+                </div>
+                
+                {% if payloads %}
+                <div class="report-card border-danger">
+                    <h5 class="text-malware"><i class="fas fa-virus"></i> Artifacts Found</h5>
+                    {% for p in payloads %}
+                        <div class="small mt-2 p-2 border-bottom border-secondary">
+                            <strong>File:</strong> {{ p.url }}<br>
+                            <strong>Hash:</strong> <small>{{ p.hash }}</small>
+                        </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="col-md-8">
+                <div class="report-card">
+                    <h5 class="border-bottom pb-2"><i class="fas fa-list-ol"></i> Execution Timeline</h5>
+                    <div class="terminal-box mt-3">
+                        {% for log in logs %}
+                            {% if log.event_data %}
+                            <div class="mb-2 ps-2 {% if log.event_data in dangerous_commands %}border-malware{% else %}border-normal{% endif %}">
+                                <span class="text-secondary small">[{{ log.timestamp|date:"H:i:s" }}]</span>
+                                <span class="ms-2 {% if log.event_data in dangerous_commands %}text-malware{% endif %}">
+                                    {{ log.event_data }}
+                                </span>
+                            </div>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <footer class="mt-5 text-center text-muted small">
+            MirageNet Surveillance - Adli Bilişim ve Olay Müdahale Raporu
+        </footer>
+    </div>
+
+    <script>
+        // Otomatik print diyaloğunu aç (eğre PDF butonuyla gelindiyse)
+        window.onload = function() {
+            if (window.location.search.indexOf('auto=1') > -1) {
+                window.print();
+            }
+        };
+    </script>
+</body>
+</html>

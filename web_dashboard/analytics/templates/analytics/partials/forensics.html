@@ -17,10 +17,14 @@
             <div style="color: #8b949e; margin-top: 5px; font-family: Consolas, monospace;">Target IP: <span style="color: #58a6ff;">{{ ip_address }}</span></div>
         </div>
         <div>
-            <button class="nav-btn" style="background: rgba(188, 140, 255, 0.1); border: 1px solid #bc8cff; color: #bc8cff; padding: 8px 16px; border-radius: 6px; cursor: pointer;">
+            <button class="nav-btn" 
+                onclick="window.open('/session/{{ session_id }}/export/pdf/?auto=1', '_blank')"
+                style="background: rgba(188, 140, 255, 0.1); border: 1px solid #bc8cff; color: #bc8cff; padding: 8px 16px; border-radius: 6px; cursor: pointer;">
                 <i class="fas fa-download"></i> Export PDF
             </button>
-            <button class="nav-btn" style="background: rgba(88, 166, 255, 0.1); border: 1px solid #58a6ff; color: #58a6ff; padding: 8px 16px; border-radius: 6px; margin-left: 10px; cursor: pointer;">
+            <button class="nav-btn"
+                onclick="window.location.href='/session/{{ session_id }}/export/json/'"
+                style="background: rgba(88, 166, 255, 0.1); border: 1px solid #58a6ff; color: #58a6ff; padding: 8px 16px; border-radius: 6px; margin-left: 10px; cursor: pointer;">
                 <i class="fas fa-code"></i> Export JSON
             </button>
         </div>

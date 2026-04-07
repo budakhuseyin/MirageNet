@@ -203,6 +203,61 @@ def forensic_report_view(request, session_id):
     }
     return render(request, 'analytics/partials/forensics.html', context)
 
+from django.http import JsonResponse
+from django.core import serializers
+
+def export_session_json(request, session_id):
+    logs = AttackLog.objects.filter(session_id=session_id)
+    data = list(logs.values())
+    response = JsonResponse(data, safe=False, json_dumps_params={'indent': 2})
+    response['Content-Disposition'] = f'attachment; filename=miragenet_report_{session_id}.json'
+    return response
+
+def export_session_pdf(request, session_id):
+    # Bu view, forensic_report_view ile aynı mantığı kullanır ama modal/partial yerine tam sayfa döner.
+    logs = AttackLog.objects.filter(session_id=session_id).order_by('timestamp')
+    if not logs.exists():
+        return render(request, 'analytics/partials/coming_soon.html', {'module': 'Session Not Found'})
+    
+    first_log = logs.first()
+    ip_address = first_log.ip_address
+    
+    # Logic duplication from forensic_report_view (can be refactored, but kept simple for now)
+    behavior = "Discovery & Reconnaissance"
+    payloads = []
+    dangerous_commands = []
+    has_brute = logs.filter(module='SSH-Login').exists()
+    
+    for l in logs:
+        data = (l.event_data or '').strip()
+        data_lower = data.lower()
+        if 'wget ' in data_lower or 'curl ' in data_lower or 'ftp ' in data_lower:
+            behavior = "Malware Deployment"
+            parts = data.split()
+            url = next((p for p in parts if p.startswith('http') or '.sh' in p or '.bin' in p or '.elf' in p or '.txt' in p), 'unknown_payload')
+            pseudo_hash = hashlib.sha256(url.encode()).hexdigest()
+            payloads.append({'cmd': data, 'url': url, 'hash': pseudo_hash})
+            dangerous_commands.append(data)
+        elif any(kw in data_lower for kw in ['cat /etc/', 'sudo', 'passwd', 'shadow', 'chmod', 'rm -rf']):
+            if behavior != "Malware Deployment":
+                behavior = "Privilege Escalation & Exfiltration"
+            dangerous_commands.append(data)
+    if has_brute and behavior == "Discovery & Reconnaissance":
+        behavior = "Brute Force Attempt"
+
+    context = {
+        'session_id': session_id,
+        'ip_address': ip_address,
+        'logs': logs,
+        'behavior': behavior,
+        'payloads': payloads,
+        'dangerous_commands': dangerous_commands,
+        'reputation': 'Critical Malicious / Botnet Node' if payloads else 'Suspicious / Scanner',
+        'signature': 'Custom Python Script / Masscan' if hasattr(first_log, 'user_agent') and not getattr(first_log, 'user_agent') else 'OpenSSH_8.9p1 Ubuntu'
+    }
+    return render(request, 'analytics/forensic_report_full.html', context)
+
+
 
 def settings_view(request):
     request.session['active_tab'] = 'settings'

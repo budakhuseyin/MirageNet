@@ -13,5 +13,7 @@ urlpatterns = [
     path('view/stats/', views.stats_view, name='stats_view'),
     path('view/forensics/', views.forensics_view, name='forensics_view'),
     path('session/<str:session_id>/forensics/', views.forensic_report_view, name='forensic_report_view'),
+    path('session/<str:session_id>/export/json/', views.export_session_json, name='export_session_json'),
+    path('session/<str:session_id>/export/pdf/', views.export_session_pdf, name='export_session_pdf'),
     path('view/settings/', views.settings_view, name='settings_view'),
 ]
