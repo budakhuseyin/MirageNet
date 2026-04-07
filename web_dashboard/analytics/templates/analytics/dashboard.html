@@ -14,6 +14,9 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
+    <!-- Chart.js — İstatistikler sekmesi için -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
 
@@ -324,8 +327,14 @@
             }
         });
 
-        // HTMX bir partial yüklediğinde harita DOM'daysa init et
+        window.mirageCharts = []; // Chart nesnelerini tutmak icin (swaps'de destroy edilmesi lazim)
+
+        // HTMX bir partial yüklediğinde harita veya canvas DOM'daysa init et
         document.body.addEventListener('htmx:afterSwap', function (evt) {
+            // Harita ve Chart'lar sadece ana ekran degistiginde init edilmeli.
+            // Soldaki HTMX polling (sessions-poll) calistiginda bu event tetikleniyor ve ekranlari bozuyordu!
+            if (evt.detail.target.id !== 'main-content') return;
+            
             var mapDiv = document.getElementById('attack-map');
 
             // Harita DOM'dan çıktı → eski referansı temizle ki geri dönünce yeniden init edilsin
@@ -376,6 +385,7 @@
                     }
                 }
             }
+
         });
 
         // Global newAttack event dinleyici (HTMX'ten gelen datayi yakalar)

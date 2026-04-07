@@ -1,0 +1,299 @@
+<style>
+    .stats-container {
+        padding: 10px;
+        max-height: calc(100vh - 80px);
+        overflow-y: auto;
+    }
+
+    .stats-container::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    .stats-container::-webkit-scrollbar-track {
+        background: #0d1117;
+    }
+
+    .stats-container::-webkit-scrollbar-thumb {
+        background: #30363d;
+        border-radius: 4px;
+    }
+
+    .stat-card {
+        background: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 8px;
+        padding: 20px 15px;
+        text-align: center;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        height: 100%;
+        transition: transform 0.2s;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-2px);
+        border-color: #58a6ff;
+    }
+
+    .stat-card h6 {
+        color: #8b949e;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 1.2px;
+        margin-bottom: 10px;
+    }
+
+    .stat-card h3 {
+        margin: 0;
+        font-size: 2rem;
+        font-weight: bold;
+    }
+
+    /* Cyberpunk Colors for metrics */
+    .metric-blue {
+        color: #58a6ff;
+        text-shadow: 0 0 10px rgba(88, 166, 255, 0.4);
+    }
+
+    .metric-green {
+        color: #3fb950;
+        text-shadow: 0 0 10px rgba(63, 185, 80, 0.4);
+    }
+
+    .metric-red {
+        color: #ff7b72;
+        text-shadow: 0 0 10px rgba(255, 123, 114, 0.4);
+    }
+
+    .metric-purple {
+        color: #bc8cff;
+        text-shadow: 0 0 10px rgba(188, 140, 255, 0.4);
+    }
+
+    .chart-box {
+        background: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 8px;
+        padding: 15px;
+        margin-top: 20px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    }
+
+    .chart-box h5 {
+        color: #c9d1d9;
+        font-size: 1.1rem;
+        border-bottom: 1px solid #30363d;
+        padding-bottom: 10px;
+        margin-bottom: 15px;
+    }
+</style>
+
+<div class="stats-container">
+    <h4 style="color: #c9d1d9; margin-bottom: 20px;"><i class="fas fa-chart-line"></i> Global Threat Analytics</h4>
+
+    <!-- 1. Genel Durum Paneli (Sadece bu kisim her 3 saniyede bir guncellenir) -->
+    <div id="stats-summary-cards" class="row g-3" hx-get="/view/stats/" hx-trigger="every 3s" hx-select="#stats-summary-cards" hx-swap="outerHTML">
+        <div class="col-md-3">
+            <div class="stat-card">
+                <h6>Total Intrusion Events</h6>
+                <h3 class="metric-blue">{{ total_events }}</h3>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <h6>Unique Attackers</h6>
+                <h3 class="metric-purple">{{ unique_attackers }}</h3>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <h6>Success Ratio (Breaches)</h6>
+                <h3 class="{% if success_ratio > 0 %}metric-red{% else %}metric-green{% endif %}">{{ success_ratio }}%
+                </h3>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <h6>System Uptime</h6>
+                <h3 class="metric-green">{{ uptime_str }}</h3>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. Saldırı Zaman Çizelgesi -->
+    <div class="row">
+        <div class="col-12">
+            <div class="chart-box">
+                <h5>Traffic Pulse (Last 24 Hours)</h5>
+                <canvas id="timelineChart" height="80"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3 & 5. Port/Modül ve Coğrafi Dağılım -->
+    <div class="row">
+        <div class="col-md-4">
+            <div class="chart-box">
+                <h5>Target Distribution</h5>
+                <canvas id="portChart" height="200"></canvas>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="chart-box">
+                <h5>Top Source Countries</h5>
+                <canvas id="countryChart" height="200"></canvas>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="chart-box">
+                <h5>Attacker Complexity</h5>
+                <canvas id="complexityChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Şifreler ve Kullanıcı Adları -->
+    <div class="row mb-5">
+        <div class="col-md-6">
+            <div class="chart-box">
+                <h5>Top Targeted Usernames</h5>
+                <canvas id="usersChart" height="150"></canvas>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="chart-box">
+                <h5>Top Attempted Passwords</h5>
+                <canvas id="passwordsChart" height="150"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Django'dan gelen JSON Datasini Saklama -->
+{{ chart_data_json|json_script:"chart-data" }}
+
+<script>
+    // HTMX innerHTML ile bu partial'i eklediginde asagidaki kod calistirilacaktir.
+    (function () {
+        // Eski grafikleri sil (Memory leak onleme)
+        if (window.mirageCharts && window.mirageCharts.length > 0) {
+            window.mirageCharts.forEach(c => c.destroy());
+            window.mirageCharts = [];
+        } else {
+            window.mirageCharts = [];
+        }
+
+        var initCharts = function () {
+            var dataNode = document.getElementById('chart-data');
+            if (!dataNode) return;
+
+            try {
+                var chartData = JSON.parse(dataNode.textContent);
+                Chart.defaults.color = '#8b949e';
+                Chart.defaults.borderColor = '#30363d';
+                var cyberGrid = { color: '#30363d', tickColor: '#30363d', drawBorder: false };
+
+                // 2. Traffic Pulse (Line Chart)
+                var ctxTimeline = document.getElementById('timelineChart');
+                if (ctxTimeline) {
+                    ctxTimeline = ctxTimeline.getContext('2d');
+                    var gradient = ctxTimeline.createLinearGradient(0, 0, 0, 400);
+                    gradient.addColorStop(0, 'rgba(88, 166, 255, 0.5)');
+                    gradient.addColorStop(1, 'rgba(88, 166, 255, 0.0)');
+
+                    window.mirageCharts.push(new Chart(ctxTimeline, {
+                        type: 'line',
+                        data: {
+                            labels: chartData.timeline.labels,
+                            datasets: [{
+                                label: 'Attacks',
+                                data: chartData.timeline.data,
+                                borderColor: '#58a6ff',
+                                backgroundColor: gradient,
+                                borderWidth: 2,
+                                fill: true,
+                                tension: 0.4,
+                                pointBackgroundColor: '#0d1117',
+                                pointBorderColor: '#58a6ff',
+                                pointBorderWidth: 2,
+                                pointRadius: 4
+                            }]
+                        },
+                        options: { responsive: true, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { grid: cyberGrid, beginAtZero: true } } }
+                    }));
+                }
+
+                // 3. Port & Module Distribution (Doughnut Chart)
+                var ctxPort = document.getElementById('portChart');
+                if (ctxPort) {
+                    window.mirageCharts.push(new Chart(ctxPort.getContext('2d'), {
+                        type: 'doughnut',
+                        data: {
+                            labels: chartData.modules.labels,
+                            datasets: [{ data: chartData.modules.data, backgroundColor: ['#ff7b72', '#58a6ff', '#3fb950', '#bc8cff', '#d2a8ff'], borderWidth: 0, hoverOffset: 4 }]
+                        },
+                        options: { responsive: true, cutout: '70%', plugins: { legend: { position: 'bottom', labels: { color: '#c9d1d9', padding: 20 } } } }
+                    }));
+                }
+
+                // 5. Coğrafi Dağılım (Bar Chart)
+                var ctxCountry = document.getElementById('countryChart');
+                if (ctxCountry) {
+                    window.mirageCharts.push(new Chart(ctxCountry.getContext('2d'), {
+                        type: 'bar',
+                        data: {
+                            labels: chartData.top_countries.labels,
+                            datasets: [{ label: 'Attacks', data: chartData.top_countries.data, backgroundColor: '#bc8cff', borderRadius: 4 }]
+                        },
+                        options: { responsive: true, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { grid: cyberGrid, beginAtZero: true } } }
+                    }));
+                }
+
+                // 6. Saldırgan Karmaşıklığı (Pie Chart)
+                var ctxComplexity = document.getElementById('complexityChart');
+                if (ctxComplexity) {
+                    window.mirageCharts.push(new Chart(ctxComplexity.getContext('2d'), {
+                        type: 'pie',
+                        data: {
+                            labels: chartData.complexity.labels,
+                            datasets: [{ data: chartData.complexity.data, backgroundColor: ['#3fb950', '#d2a8ff', '#ff7b72'], borderWidth: 0 }]
+                        },
+                        options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { color: '#c9d1d9' } } } }
+                    }));
+                }
+
+                // 4a. Top Usernames (Horizontal Bar)
+                var ctxUsers = document.getElementById('usersChart');
+                if (ctxUsers) {
+                    window.mirageCharts.push(new Chart(ctxUsers.getContext('2d'), {
+                        type: 'bar',
+                        data: {
+                            labels: chartData.top_users.labels,
+                            datasets: [{ label: 'Attempts', data: chartData.top_users.data, backgroundColor: '#2ea043', borderRadius: 4 }]
+                        },
+                        options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } }, scales: { x: { grid: cyberGrid, beginAtZero: true }, y: { grid: { display: false } } } }
+                    }));
+                }
+
+                // 4b. Top Passwords (Horizontal Bar)
+                var ctxPasswords = document.getElementById('passwordsChart');
+                if (ctxPasswords) {
+                    window.mirageCharts.push(new Chart(ctxPasswords.getContext('2d'), {
+                        type: 'bar',
+                        data: {
+                            labels: chartData.top_passwords.labels,
+                            datasets: [{ label: 'Attempts', data: chartData.top_passwords.data, backgroundColor: '#f85149', borderRadius: 4 }]
+                        },
+                        options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } }, scales: { x: { grid: cyberGrid, beginAtZero: true }, y: { grid: { display: false } } } }
+                    }));
+                }
+            } catch (err) {
+                console.error("[DEBUG] Chart.js init error:", err);
+                document.getElementById('chart-data').insertAdjacentHTML('afterend', '<p style="color:red">Grafik Yukleme Hatasi: ' + err.message + '</p>');
+            }
+        };
+
+        // Gecikmeli cagiriyoruz ki HTMX DOM'a ogeleri tam olarak yerlestirmis olsun
+        setTimeout(initCharts, 50);
+
+    })();
+</script>
