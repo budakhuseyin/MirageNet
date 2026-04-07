@@ -16,9 +16,12 @@ def dashboard_home(request):
     return render(request, 'analytics/dashboard.html', context)
 
 def session_details(request, session_id):
-    # Tıklanan session'a ait tüm logları kronolojik sırayla çekiyoruz
+    # Eğer Forensics tabı açıksa, o oturum için adli analizi aç
+    if request.session.get('active_tab') == 'forensics':
+        return forensic_report_view(request, session_id)
+
+    # Tıklanan session'a ait tüm logları kronolojik sırayla çekiyoruz (Canlı Terminal Modu)
     logs = AttackLog.objects.filter(session_id=session_id).order_by('timestamp')
-    
     return render(request, 'analytics/partials/terminal.html', {'logs': logs, 'session_id': session_id})
 
 
@@ -72,6 +75,7 @@ def map_view(request):
 
 def terminal_default_view(request):
     """Varsayılan boş terminal ekranını döner."""
+    request.session['active_tab'] = 'terminal'
     return render(request, 'analytics/partials/terminal_default.html')
 
 
@@ -147,8 +151,55 @@ def stats_view(request):
     return render(request, 'analytics/partials/stats_view.html', context)
 
 
+import hashlib
+
 def forensics_view(request):
-    return render(request, 'analytics/partials/coming_soon.html', {'module': 'Forensics'})
+    request.session['active_tab'] = 'forensics'
+    return render(request, 'analytics/partials/forensics_default.html')
+
+def forensic_report_view(request, session_id):
+    logs = AttackLog.objects.filter(session_id=session_id).order_by('timestamp')
+    if not logs.exists():
+        return render(request, 'analytics/partials/coming_soon.html', {'module': 'Session Not Found'})
+    
+    first_log = logs.first()
+    ip_address = first_log.ip_address
+    
+    # Otomatik Tehdit Davranışı Sınıflandırması
+    behavior = "Discovery & Reconnaissance"
+    payloads = []
+    dangerous_commands = []
+    has_brute = logs.filter(module='SSH-Login').exists()
+    
+    for l in logs:
+        data = (l.event_data or '').strip()
+        data_lower = data.lower()
+        if 'wget ' in data_lower or 'curl ' in data_lower or 'ftp ' in data_lower:
+            behavior = "Malware Deployment"
+            parts = data.split()
+            url = next((p for p in parts if p.startswith('http') or '.sh' in p or '.bin' in p or '.elf' in p or '.txt' in p), 'unknown_payload')
+            pseudo_hash = hashlib.sha256(url.encode()).hexdigest()
+            payloads.append({'cmd': data, 'url': url, 'hash': pseudo_hash})
+            dangerous_commands.append(data)
+        elif any(kw in data_lower for kw in ['cat /etc/', 'sudo', 'passwd', 'shadow', 'chmod', 'rm -rf']):
+            if behavior != "Malware Deployment":
+                behavior = "Privilege Escalation & Exfiltration"
+            dangerous_commands.append(data)
+            
+    if has_brute and behavior == "Discovery & Reconnaissance":
+        behavior = "Brute Force Attempt"
+
+    context = {
+        'session_id': session_id,
+        'ip_address': ip_address,
+        'logs': logs,
+        'behavior': behavior,
+        'payloads': payloads,
+        'dangerous_commands': dangerous_commands,
+        'reputation': 'Critical Malicious / Botnet Node' if payloads else 'Suspicious / Scanner',
+        'signature': 'Custom Python Script / Masscan' if hasattr(first_log, 'user_agent') and not getattr(first_log, 'user_agent') else 'OpenSSH_8.9p1 Ubuntu'
+    }
+    return render(request, 'analytics/partials/forensics.html', context)
 
 
 def settings_view(request):

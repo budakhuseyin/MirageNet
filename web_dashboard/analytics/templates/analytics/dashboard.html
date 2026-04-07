@@ -316,14 +316,17 @@
             }
         }
 
-        // Sol panelden session'a tıklandığında terminal view'ına dön
+        // Sol panelden session'a tıklandığında (Eğer Forensics modunda değilsek) terminal view'ına dön
         document.body.addEventListener('htmx:beforeRequest', function (evt) {
             var target = evt.detail.elt;
             if (target && target.classList.contains('session-card')) {
-                navBtns.forEach(function (b) {
-                    b.classList.remove('active', 'active-green');
-                });
-                document.getElementById('btn-terminal').classList.add('active-green');
+                var isForensics = document.getElementById('btn-forensics').classList.contains('active');
+                if (!isForensics) {
+                    navBtns.forEach(function (b) {
+                        b.classList.remove('active', 'active-green');
+                    });
+                    document.getElementById('btn-terminal').classList.add('active-green');
+                }
             }
         });
 

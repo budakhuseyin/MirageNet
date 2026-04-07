@@ -12,5 +12,6 @@ urlpatterns = [
     path('view/terminal/', views.terminal_default_view, name='terminal_default_view'),
     path('view/stats/', views.stats_view, name='stats_view'),
     path('view/forensics/', views.forensics_view, name='forensics_view'),
+    path('session/<str:session_id>/forensics/', views.forensic_report_view, name='forensic_report_view'),
     path('view/settings/', views.settings_view, name='settings_view'),
 ]
