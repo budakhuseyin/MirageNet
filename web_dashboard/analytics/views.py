@@ -62,6 +62,7 @@ def session_list_partial(request):
 
 def map_view(request):
     """World Map partial — Leaflet.js ile yüklenir. Geçmiş saldırıları haritaya döker."""
+    request.session['active_tab'] = 'map'
     # Enlem ve boylamı geçerli olan (sıfır olmayan) son 500 saldırıyı çek.
     historical_data = list(AttackLog.objects.exclude(latitude=0).exclude(latitude__isnull=True).values(
         'ip_address', 'latitude', 'longitude'
@@ -85,6 +86,7 @@ from django.db.models.functions import TruncHour
 
 def stats_view(request):
     """Genel Durum, Çizelgeler ve Karmaşıklık İstatistikleri"""
+    request.session['active_tab'] = 'stats'
     
     # 1. Genel Durum Paneli
     total_events = AttackLog.objects.count()
@@ -203,4 +205,5 @@ def forensic_report_view(request, session_id):
 
 
 def settings_view(request):
+    request.session['active_tab'] = 'settings'
     return render(request, 'analytics/partials/coming_soon.html', {'module': 'Settings'})
