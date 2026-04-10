@@ -34,3 +34,6 @@ data/miragenet.db
 data/payloads/*
 
 canliya_test.txt
+
+/backups
+/exports

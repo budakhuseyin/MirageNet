@@ -1,7 +1,13 @@
+import json
+import hashlib
+from datetime import timedelta
 from django.shortcuts import render
-from .models import AttackLog
+from django.utils import timezone
 from django.db.models import Count, Max
-import json 
+from django.db.models.functions import TruncHour, TruncMinute, TruncDay
+from django.http import JsonResponse
+from django.core import serializers
+from .models import AttackLog
 
 def dashboard_home(request):
     # Port'a göre grupluyoruz ki her session tek bir satır olarak gelsin
@@ -23,11 +29,6 @@ def session_details(request, session_id):
     # Tıklanan session'a ait tüm logları kronolojik sırayla çekiyoruz (Canlı Terminal Modu)
     logs = AttackLog.objects.filter(session_id=session_id).order_by('timestamp')
     return render(request, 'analytics/partials/terminal.html', {'logs': logs, 'session_id': session_id})
-
-
-
-from django.utils import timezone
-from datetime import timedelta
 
 def session_list_partial(request):
     recent_sessions = list(AttackLog.objects.values('session_id', 'ip_address', 'port', 'latitude', 'longitude').annotate(
@@ -92,8 +93,6 @@ def terminal_default_view(request):
     request.session['active_tab'] = 'terminal'
     return render(request, 'analytics/partials/terminal_default.html')
 
-
-from django.db.models.functions import TruncHour, TruncMinute, TruncDay
 
 def stats_view(request):
     """Genel Durum, Çizelgeler ve Karmaşıklık İstatistikleri"""
@@ -210,8 +209,6 @@ def stats_view(request):
     return render(request, 'analytics/partials/stats_view.html', context)
 
 
-import hashlib
-
 def forensics_view(request):
     request.session['active_tab'] = 'forensics'
     return render(request, 'analytics/partials/forensics_default.html')
@@ -260,8 +257,6 @@ def forensic_report_view(request, session_id):
     }
     return render(request, 'analytics/partials/forensics.html', context)
 
-from django.http import JsonResponse
-from django.core import serializers
 
 def export_session_json(request, session_id):
     logs = AttackLog.objects.filter(session_id=session_id)

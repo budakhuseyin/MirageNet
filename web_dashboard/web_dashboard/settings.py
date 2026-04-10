@@ -77,9 +77,6 @@ WSGI_APPLICATION = 'web_dashboard.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-
-
-BASE_DIR = Path(__file__).resolve().parent.parent
 # MirageNet kök dizinindeki data/miragenet.db dosyasına giden yol
 MIRAGENET_DB_PATH = os.path.join(BASE_DIR.parent, 'data', 'miragenet.db')
 
