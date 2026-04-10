@@ -93,23 +93,68 @@ def terminal_default_view(request):
     return render(request, 'analytics/partials/terminal_default.html')
 
 
-from datetime import timedelta
-from django.utils import timezone
-from django.db.models.functions import TruncHour
+from django.db.models.functions import TruncHour, TruncMinute, TruncDay
 
 def stats_view(request):
     """Genel Durum, Çizelgeler ve Karmaşıklık İstatistikleri"""
     request.session['active_tab'] = 'stats'
     
+    # Zaman Aralığı Filtresi
+    time_range = request.GET.get('range', '24h')
+    now = timezone.now()
+    start_time = None
+    trunc_func = TruncHour
+    date_format = "%H:00"
+
+    if time_range == '1h':
+        start_time = now - timedelta(hours=1)
+        trunc_func = TruncMinute
+        date_format = "%H:%M"
+    elif time_range == '3h':
+        start_time = now - timedelta(hours=3)
+        trunc_func = TruncMinute
+        date_format = "%H:%M"
+    elif time_range == '6h':
+        start_time = now - timedelta(hours=6)
+        trunc_func = TruncHour
+        date_format = "%H:00"
+    elif time_range == '12h':
+        start_time = now - timedelta(hours=12)
+        trunc_func = TruncHour
+        date_format = "%H:00"
+    elif time_range == '7d':
+        start_time = now - timedelta(days=7)
+        trunc_func = TruncDay
+        date_format = "%Y-%m-%d"
+    elif time_range == '30d':
+        start_time = now - timedelta(days=30)
+        trunc_func = TruncDay
+        date_format = "%Y-%m-%d"
+    elif time_range == 'all':
+        start_time = None
+        trunc_func = TruncDay
+        date_format = "%Y-%m-%d"
+    else: # Default 24h
+        start_time = now - timedelta(hours=24)
+        trunc_func = TruncHour
+        date_format = "%H:00"
+        time_range = '24h'
+
+    # Ortak filtrelemesi
+    base_qs = AttackLog.objects.all()
+    if start_time:
+        base_qs = base_qs.filter(timestamp__gte=start_time)
+
     # 1. Genel Durum Paneli
-    total_events = AttackLog.objects.count()
-    unique_attackers = AttackLog.objects.values('ip_address').distinct().count()
+    total_events = base_qs.count()
+    unique_attackers = base_qs.values('ip_address').distinct().count()
     
-    total_sessions = AttackLog.objects.values('session_id').distinct().count()
+    total_sessions = base_qs.values('session_id').distinct().count()
     # Başarılı sayılanlar: SSH-Command modülüne ulaşabilenler (içeri girenler)
-    successful_sessions = AttackLog.objects.filter(module='SSH-Command').values('session_id').distinct().count()
+    successful_sessions = base_qs.filter(module='SSH-Command').values('session_id').distinct().count()
     success_ratio = round((successful_sessions / total_sessions * 100)) if total_sessions > 0 else 0
     
+    # Uptime statiktir, sistem başladığından beri geçerlidir
     first_log = AttackLog.objects.order_by('timestamp').first()
     uptime_str = "0h 0m"
     if first_log:
@@ -119,30 +164,28 @@ def stats_view(request):
         minutes, _ = divmod(rem, 60)
         uptime_str = f"{int(days)}d {int(hours)}h {int(minutes)}m" if days > 0 else f"{int(hours)}h {int(minutes)}m"
 
-    # 2. Saldırı Zaman Çizelgesi (Son 24 Saat)
-    last_24h = timezone.now() - timedelta(hours=24)
-    timeline_data = AttackLog.objects.filter(timestamp__gte=last_24h) \
-        .annotate(hour=TruncHour('timestamp')) \
-        .values('hour') \
+    # 2. Saldırı Zaman Çizelgesi (Dinamik Gruplama)
+    timeline_data = base_qs.annotate(time_unit=trunc_func('timestamp')) \
+        .values('time_unit') \
         .annotate(count=Count('id')) \
-        .order_by('hour')
+        .order_by('time_unit')
     
-    timeline_labels = [item['hour'].strftime("%H:00") for item in timeline_data]
+    timeline_labels = [item['time_unit'].strftime(date_format) for item in timeline_data]
     timeline_counts = [item['count'] for item in timeline_data]
 
     # 3. Port & Modül Dağılımı
-    ports_data = list(AttackLog.objects.values('port').annotate(count=Count('id')).order_by('-count'))
-    modules_data = list(AttackLog.objects.values('module').annotate(count=Count('id')).order_by('-count'))
+    ports_data = list(base_qs.values('port').annotate(count=Count('id')).order_by('-count'))
+    modules_data = list(base_qs.values('module').annotate(count=Count('id')).order_by('-count'))
     
     # 4. En Çok Denenen Şifreler ve Kullanıcı Adları
-    top_users = list(AttackLog.objects.exclude(username__in=['N/A', '-']).values('username').annotate(count=Count('id')).order_by('-count')[:5])
-    top_passwords = list(AttackLog.objects.exclude(password__in=['N/A', '-', 'Scanning', 'Attempted download']).values('password').annotate(count=Count('id')).order_by('-count')[:5])
+    top_users = list(base_qs.exclude(username__in=['N/A', '-']).values('username').annotate(count=Count('id')).order_by('-count')[:5])
+    top_passwords = list(base_qs.exclude(password__in=['N/A', '-', 'Scanning', 'Attempted download']).values('password').annotate(count=Count('id')).order_by('-count')[:5])
 
     # 5. Coğrafi Dağılım
-    top_countries = list(AttackLog.objects.exclude(country_code='??').exclude(country_code='XX').values('country_code').annotate(count=Count('id')).order_by('-count')[:7])
+    top_countries = list(base_qs.exclude(country_code='??').exclude(country_code='XX').values('country_code').annotate(count=Count('id')).order_by('-count')[:7])
 
     # 6. Saldırgan Karmaşıklığı (Complexity Score)
-    session_cmd_counts = AttackLog.objects.filter(module='SSH-Command').values('session_id').annotate(cmd_count=Count('id'))
+    session_cmd_counts = base_qs.filter(module='SSH-Command').values('session_id').annotate(cmd_count=Count('id'))
     high_complexity = sum(1 for s in session_cmd_counts if s['cmd_count'] > 5)
     med_complexity = sum(1 for s in session_cmd_counts if 2 <= s['cmd_count'] <= 5)
     low_complexity = total_sessions - (high_complexity + med_complexity)
@@ -152,6 +195,7 @@ def stats_view(request):
         'unique_attackers': unique_attackers,
         'success_ratio': success_ratio,
         'uptime_str': uptime_str,
+        'selected_range': time_range,
         'chart_data_json': {
             'timeline': {'labels': timeline_labels, 'data': timeline_counts},
             'ports': {'labels': [str(p['port']) for p in ports_data], 'data': [p['count'] for p in ports_data]},
