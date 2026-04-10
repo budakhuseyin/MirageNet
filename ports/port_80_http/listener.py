@@ -25,6 +25,10 @@ PAYLOAD_DIR = os.path.join(PROJECT_ROOT, "data", "payloads")
 if not os.path.exists(PAYLOAD_DIR):
     os.makedirs(PAYLOAD_DIR)
 
+# GÜVENLİK LİMİTLERİ (Disk dolmasını önlemek için ideal kotalar)
+MAX_PAYLOAD_SIZE = 2 * 1024 * 1024 # 2MB (Webshell ve scriptler için fazlasıyla yeterli)
+MAX_PAYLOAD_COUNT = 1000          # Toplamda 1000 adet payload biriktirilir
+
 class HoneypotHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
     
     def get_or_create_session(self):
@@ -161,15 +165,26 @@ class HoneypotHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
             injected_code = parsed_data.get('newcontent', [''])[0]
             payload_filename = f"malware_{uuid.uuid4().hex[:8]}.txt"
             payload_path = os.path.join(PAYLOAD_DIR, payload_filename)
-            with open(payload_path, "w", encoding="utf-8") as f:
-                f.write(injected_code)
+            
+            # KOTA KONTROLLERİ
+            size_ok = len(injected_code.encode('utf-8')) <= MAX_PAYLOAD_SIZE
+            count_ok = len(os.listdir(PAYLOAD_DIR)) < MAX_PAYLOAD_COUNT
+            
+            log_status = ""
+            if size_ok and count_ok:
+                with open(payload_path, "w", encoding="utf-8") as f:
+                    f.write(injected_code)
+                log_status = f"Saved: {payload_filename}"
+            else:
+                reason = "Size Limit Exceeded" if not size_ok else "File Count Limit Exceeded"
+                log_status = f"Ignored ({reason})"
                 
             # Shell Upload Logu
             log_attack(
                 ip_address=self.client_address[0], port=80, module="HTTP-WP-Shell-Upload", 
-                username="theme-editor.php", password=f"Saved: {payload_filename}", user_agent=user_agent, session_id=session_id,
-                event_data=f"POST /wp-admin/theme-editor.php (File Write)", 
-                response_data=f"HTTP 200 OK - File edited successfully. Payload saved as: {payload_filename}", country_code="??"
+                username="theme-editor.php", password=log_status, user_agent=user_agent, session_id=session_id,
+                event_data=f"POST /wp-admin/theme-editor.php (File Write Attempt)", 
+                response_data=f"HTTP 200 OK - File edited successfully. {log_status if size_ok and count_ok else ''}", country_code="??"
             )
             self._set_headers(200, session_id=session_id)
             self.wfile.write(b"<h1>File edited successfully.</h1> <a href='/wp-admin/theme-editor.php'>Go back</a>")

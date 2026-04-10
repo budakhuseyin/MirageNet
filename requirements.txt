@@ -1,3 +1,5 @@
 paramiko
 django
 geoip2
+python-dotenv
+waitress

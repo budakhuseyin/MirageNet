@@ -26,17 +26,30 @@ def session_details(request, session_id):
 
 
 
+from django.utils import timezone
+from datetime import timedelta
+
 def session_list_partial(request):
-    recent_sessions = AttackLog.objects.values('session_id', 'ip_address', 'port', 'latitude', 'longitude').annotate(
+    recent_sessions = list(AttackLog.objects.values('session_id', 'ip_address', 'port', 'latitude', 'longitude').annotate(
         log_count=Count('id'),
         last_seen=Max('timestamp'),
         last_id=Max('id')
-    ).order_by('-last_seen')[:20]
+    ).order_by('-last_seen')[:20])
+
+    now = timezone.now()
+    for s in recent_sessions:
+        diff = now - s['last_seen']
+        if diff < timedelta(minutes=3):
+            s['status'] = 'active'
+        elif diff < timedelta(minutes=10):
+            s['status'] = 'recent'
+        else:
+            s['status'] = 'idle'
 
     response = render(request, 'analytics/partials/session_list.html', {'recent_sessions': recent_sessions})
 
     # Sadece gerçekten YENİ bir saldırı varsa radar eventi gönder
-    if recent_sessions.exists():
+    if recent_sessions:
         latest = recent_sessions[0]
         lat = latest.get('latitude') or 0.0
         lon = latest.get('longitude') or 0.0
@@ -261,4 +274,4 @@ def export_session_pdf(request, session_id):
 
 def settings_view(request):
     request.session['active_tab'] = 'settings'
-    return render(request, 'analytics/partials/coming_soon.html', {'module': 'Settings'})
+    return render(request, 'analytics/partials/coming_soon.html', {'module': 'Settings'})

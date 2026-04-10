@@ -8,6 +8,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 HTTP_LISTENER = os.path.join(BASE_DIR, 'ports', 'port_80_http', 'listener.py')
 SSH_LISTENER = os.path.join(BASE_DIR, 'ports', 'port_22_ssh', 'ssh_listener.py')
 DJANGO_MANAGE = os.path.join(BASE_DIR, 'web_dashboard', 'manage.py')
+WSGI_SERVER = os.path.join(BASE_DIR, 'web_dashboard', 'wsgi_server.py')
 
 def init_database():
     print("[*] Checking / Initializing database...")
@@ -42,15 +43,15 @@ def main():
     init_database()
     print("-" * 50)
     
-    processes = []
+    active_processes = {}
     
-    # 2. Start Django Dashboard 
+    # 2. Start Django Dashboard (Production with Waitress)
     django_proc = run_process(
-        "Web Dashboard", 
-        [sys.executable, DJANGO_MANAGE, "runserver", "0.0.0.0:8000"], 
+        "Web Dashboard (Waitress)", 
+        [sys.executable, WSGI_SERVER], 
         cwd=os.path.join(BASE_DIR, "web_dashboard")
     )
-    if django_proc: processes.append(django_proc)
+    if django_proc: active_processes["Web Dashboard"] = django_proc
     
     time.sleep(2) # Give django a moment to start
     print("-" * 50)
@@ -61,7 +62,7 @@ def main():
         [sys.executable, HTTP_LISTENER], 
         cwd=BASE_DIR
     )
-    if http_proc: processes.append(http_proc)
+    if http_proc: active_processes["HTTP Sensor"] = http_proc
     
     time.sleep(1)
     
@@ -71,7 +72,7 @@ def main():
         [sys.executable, SSH_LISTENER], 
         cwd=BASE_DIR
     )
-    if ssh_proc: processes.append(ssh_proc)
+    if ssh_proc: active_processes["SSH Sensor"] = ssh_proc
     
     print("-" * 50)
     print("\n[+] ALL SENSORS AND DASHBOARD ARE RUNNING!")
@@ -80,20 +81,28 @@ def main():
     print("==================================================")
     
     try:
-        # Keep the main script running so the background processes stay alive.
-        # Wait for the processes, if one dies, we still wait.
-        for p in processes:
-            p.wait()
-    except KeyboardInterrupt:
-        print("\n\n[*] KeyboardInterrupt detected. Shutting down MirageNet...")
-        for p in processes:
-            print(f"[*] Terminating Process PID: {p.pid}...")
-            p.terminate() # or p.kill() on Windows if terminate is ignored
+        # 5. Continuous Monitoring Loop
+        while True:
+            for name, p in active_processes.items():
+                if p.poll() is not None:
+                    print(f"\n[!] CRITICAL ERROR: {name} has stopped unexpectedly (Exit Code: {p.returncode})!")
+                    raise Exception(f"{name} failure")
+            time.sleep(1) # Check every second
+            
+    except (KeyboardInterrupt, Exception) as e:
+        if isinstance(e, KeyboardInterrupt):
+            print("\n\n[*] KeyboardInterrupt detected. Shutting down MirageNet...")
+        else:
+            print(f"\n[*] Shutting down due to service failure: {e}")
+            
+        for name, p in active_processes.items():
+            print(f"[*] Terminating {name} (PID: {p.pid})...")
+            p.terminate() 
             try:
                 p.wait(timeout=3)
             except subprocess.TimeoutExpired:
                 p.kill()
-        print("[+] MirageNet stopped gracefully.")
+        print("[+] MirageNet stopped.")
 
 if __name__ == "__main__":
     main()

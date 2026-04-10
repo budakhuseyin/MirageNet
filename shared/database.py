@@ -1,12 +1,10 @@
 import sqlite3
 import os
 from datetime import datetime
-import geoip2.database
 
 # Dosya yolları
 DB_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 DB_PATH = os.path.join(DB_DIR, 'miragenet.db')
-GEOIP_PATH = os.path.join(DB_DIR, 'geolite2-city-ipv4.mmdb')
 
 if not os.path.exists(DB_DIR):
     os.makedirs(DB_DIR)
@@ -15,7 +13,6 @@ def _offline_geoip_estimate(ip):
     """İnternet olmadığında IP aralığından kaba tahmini konum döner."""
     try:
         first_octet = int(ip.split('.')[0])
-        second_octet = int(ip.split('.')[1])
     except (IndexError, ValueError):
         return "??", "Unknown", 0.0, 0.0
 
@@ -45,13 +42,40 @@ def _offline_geoip_estimate(ip):
 
 
 def get_location_data(ip):
-    """IP adresinden koordinat ve şehir bilgilerini döner."""
+    """
+    IP adresinden koordinat ve şehir bilgilerini döner. 
+    Son 30 dakika içinde bu IP için bir kayıt varsa API isteği atmaz (Cache).
+    """
+    # 1. Önce veritabanında son 30 dakika içinde bir kayıt var mı kontrol et
     try:
-        # Yerel ağ veya localhost ise sabit bir nokta dön
+        conn = sqlite3.connect(DB_PATH, timeout=10)
+        cursor = conn.cursor()
+        
+        # SQLite'da tarih karşılaştırması: Son 30 dakika
+        # NOT: log_attack'da timestamp'i YYYY-MM-DD HH:MM:SS formatında kaydettiğimiz için datetime('now', '-30 minutes') ile kıyaslayabiliriz.
+        cursor.execute('''
+            SELECT country_code, city, latitude, longitude 
+            FROM attack_logs 
+            WHERE ip_address = ? AND timestamp >= datetime('now', '-30 minutes')
+            ORDER BY id DESC LIMIT 1
+        ''', (ip,))
+        
+        row = cursor.fetchone()
+        conn.close()
+        
+        if row:
+            print(f"[*] GeoIP Cache Hit: {ip} (reusing previous data)")
+            return row[0], row[1], row[2], row[3]
+            
+    except Exception as e:
+        print(f"[!] GeoIP Cache Check Failed ({e})")
+
+    # 2. Localhost veya yerel ağ ise sabit bir nokta dön
+    try:
         if ip in ("127.0.0.1", "::1", "localhost") or ip.startswith("192.168.") or ip.startswith("10.") or ip.startswith("172."):
             return "TR", "Local/Internal", 41.0082, 28.9784
 
-        # ip-api.com ücretsiz HTTP API (kurulum gerektirmez, saniyede 45 istek)
+        # 3. ip-api.com ücretsiz HTTP API (kurulum gerektirmez, saniyede 45 istek)
         import urllib.request
         url = f"http://ip-api.com/json/{ip}?fields=status,country,countryCode,city,lat,lon"
         req = urllib.request.Request(url, headers={"User-Agent": "MirageNet/1.0"})
@@ -68,13 +92,12 @@ def get_location_data(ip):
     except Exception as e:
         print(f"[!] GeoIP Online Lookup Failed ({e}), using offline estimate...")
 
-    # Fallback: kaba IP aralığı tahmini
+    # 4. Fallback: kaba IP aralığı tahmini
     return _offline_geoip_estimate(ip)
 
 
-
 def init_db():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=10)
     cursor = conn.cursor()
     
     # Tabloyu yeni sütunlarla (city, lat, lon) oluştur/güncelle
@@ -104,7 +127,7 @@ def log_attack(ip_address, port, module, username, password, user_agent, session
     # Önce konum verilerini çek
     iso_code, city, lat, lon = get_location_data(ip_address)
     
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=10)
     cursor = conn.cursor()
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
@@ -123,7 +146,7 @@ def log_attack(ip_address, port, module, username, password, user_agent, session
     conn.close()
 
 def get_attempt_count(ip_address, session_id, module):
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=10)
     cursor = conn.cursor()
     cursor.execute('''
         SELECT COUNT(*) FROM attack_logs 
