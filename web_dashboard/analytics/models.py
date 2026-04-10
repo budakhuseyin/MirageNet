@@ -9,7 +9,7 @@ class AttackLog(models.Model):
     username = models.CharField(max_length=100, null=True, blank=True)
     password = models.CharField(max_length=255, null=True, blank=True)
     user_agent = models.TextField(null=True, blank=True)
-    session_id = models.CharField(max_length=8)
+    session_id = models.CharField(max_length=50)
     event_data = models.TextField(null=True, blank=True)
     response_data = models.TextField(null=True, blank=True)
     country_code = models.CharField(max_length=5, default="??")
@@ -18,7 +18,7 @@ class AttackLog(models.Model):
     longitude = models.FloatField(null=True, blank=True)
 
     class Meta:
-        managed = False # Django bu tabloyu modifiye etmesin
+        managed = True # Django tablonun yönetimini üstlensin
         db_table = 'attack_logs' # Veritabanındaki gerçek tablo adı
 
     def __str__(self):

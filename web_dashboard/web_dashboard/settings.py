@@ -77,15 +77,28 @@ WSGI_APPLICATION = 'web_dashboard.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-# MirageNet kök dizinindeki data/miragenet.db dosyasına giden yol
-MIRAGENET_DB_PATH = os.path.join(BASE_DIR.parent, 'data', 'miragenet.db')
+DB_TYPE = os.getenv('DB_TYPE', 'sqlite').lower()
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': MIRAGENET_DB_PATH,
+if DB_TYPE == 'postgres':
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.getenv('DB_NAME', 'miragenet'),
+            'USER': os.getenv('DB_USER', 'postgres'),
+            'PASSWORD': os.getenv('DB_PASSWORD', ''),
+            'HOST': os.getenv('DB_HOST', '127.0.0.1'),
+            'PORT': os.getenv('DB_PORT', '5432'),
+        }
     }
-}
+else:
+    # Fallback to SQLite (MirageNet kök dizinindeki data/miragenet.db)
+    MIRAGENET_DB_PATH = os.path.join(BASE_DIR.parent, 'data', 'miragenet.db')
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': MIRAGENET_DB_PATH,
+        }
+    }
 
 
 # Password validation

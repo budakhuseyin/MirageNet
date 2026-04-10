@@ -3,3 +3,4 @@ django
 geoip2
 python-dotenv
 waitress
+psycopg2-binary
