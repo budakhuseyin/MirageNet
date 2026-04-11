@@ -1,13 +1,34 @@
 import json
 import hashlib
 from datetime import timedelta
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.utils import timezone
 from django.db.models import Count, Max
 from django.db.models.functions import TruncHour, TruncMinute, TruncDay
 from django.http import JsonResponse
 from django.core import serializers
 from .models import AttackLog
+
+def login_view(request):
+    """Simple hardcoded login for Mirage Control Center."""
+    if request.method == 'POST':
+        u = request.POST.get('username')
+        p = request.POST.get('password')
+        
+        # Hardcoded logic as requested by user
+        if u == 'mirage_admin' and p == 'mirage2172':
+            request.session['mcc_authenticated'] = True
+            return redirect('dashboard_home')
+        else:
+            return render(request, 'analytics/login.html', {'error': 'Geçersiz kullanıcı adı veya şifre!'})
+            
+    return render(request, 'analytics/login.html')
+
+def logout_view(request):
+    """Logs out the user from MCC."""
+    if 'mcc_authenticated' in request.session:
+        del request.session['mcc_authenticated']
+    return redirect('login_view')
 
 def dashboard_home(request):
     # Port'a göre grupluyoruz ki her session tek bir satır olarak gelsin
@@ -224,7 +245,7 @@ def forensic_report_view(request, session_id):
     # Otomatik Tehdit Davranışı Sınıflandırması
     behavior = "Discovery & Reconnaissance"
     payloads = []
-    dangerous_commands = []
+    dangerous_command_ids = []
     has_brute = logs.filter(module='SSH-Login').exists()
     
     for l in logs:
@@ -236,11 +257,11 @@ def forensic_report_view(request, session_id):
             url = next((p for p in parts if p.startswith('http') or '.sh' in p or '.bin' in p or '.elf' in p or '.txt' in p), 'unknown_payload')
             pseudo_hash = hashlib.sha256(url.encode()).hexdigest()
             payloads.append({'cmd': data, 'url': url, 'hash': pseudo_hash})
-            dangerous_commands.append(data)
+            dangerous_command_ids.append(l.id)
         elif any(kw in data_lower for kw in ['cat /etc/', 'sudo', 'passwd', 'shadow', 'chmod', 'rm -rf']):
             if behavior != "Malware Deployment":
                 behavior = "Privilege Escalation & Exfiltration"
-            dangerous_commands.append(data)
+            dangerous_command_ids.append(l.id)
             
     if has_brute and behavior == "Discovery & Reconnaissance":
         behavior = "Brute Force Attempt"
@@ -251,9 +272,9 @@ def forensic_report_view(request, session_id):
         'logs': logs,
         'behavior': behavior,
         'payloads': payloads,
-        'dangerous_commands': dangerous_commands,
+        'dangerous_command_ids': dangerous_command_ids,
         'reputation': 'Critical Malicious / Botnet Node' if payloads else 'Suspicious / Scanner',
-        'signature': 'Custom Python Script / Masscan' if hasattr(first_log, 'user_agent') and not getattr(first_log, 'user_agent') else 'OpenSSH_8.9p1 Ubuntu'
+        'signature': 'Custom Script / Bot' if not first_log.user_agent or 'python' in first_log.user_agent.lower() else 'OpenSSH / Standard Scanner'
     }
     return render(request, 'analytics/partials/forensics.html', context)
 
@@ -277,7 +298,7 @@ def export_session_pdf(request, session_id):
     # Logic duplication from forensic_report_view (can be refactored, but kept simple for now)
     behavior = "Discovery & Reconnaissance"
     payloads = []
-    dangerous_commands = []
+    dangerous_command_ids = []
     has_brute = logs.filter(module='SSH-Login').exists()
     
     for l in logs:
@@ -289,11 +310,11 @@ def export_session_pdf(request, session_id):
             url = next((p for p in parts if p.startswith('http') or '.sh' in p or '.bin' in p or '.elf' in p or '.txt' in p), 'unknown_payload')
             pseudo_hash = hashlib.sha256(url.encode()).hexdigest()
             payloads.append({'cmd': data, 'url': url, 'hash': pseudo_hash})
-            dangerous_commands.append(data)
+            dangerous_command_ids.append(l.id)
         elif any(kw in data_lower for kw in ['cat /etc/', 'sudo', 'passwd', 'shadow', 'chmod', 'rm -rf']):
             if behavior != "Malware Deployment":
                 behavior = "Privilege Escalation & Exfiltration"
-            dangerous_commands.append(data)
+            dangerous_command_ids.append(l.id)
     if has_brute and behavior == "Discovery & Reconnaissance":
         behavior = "Brute Force Attempt"
 
@@ -303,9 +324,9 @@ def export_session_pdf(request, session_id):
         'logs': logs,
         'behavior': behavior,
         'payloads': payloads,
-        'dangerous_commands': dangerous_commands,
+        'dangerous_command_ids': dangerous_command_ids,
         'reputation': 'Critical Malicious / Botnet Node' if payloads else 'Suspicious / Scanner',
-        'signature': 'Custom Python Script / Masscan' if hasattr(first_log, 'user_agent') and not getattr(first_log, 'user_agent') else 'OpenSSH_8.9p1 Ubuntu'
+        'signature': 'Custom Script / Bot' if not first_log.user_agent or 'python' in first_log.user_agent.lower() else 'OpenSSH / Standard Scanner'
     }
     return render(request, 'analytics/forensic_report_full.html', context)
 

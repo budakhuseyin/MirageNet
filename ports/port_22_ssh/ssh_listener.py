@@ -46,8 +46,8 @@ class MirageSSHServer(paramiko.ServerInterface):
         # Oturumdaki deneme sayısını kontrol et
         attempts = get_attempt_count(self.client_ip, self.session_id, "SSH-Login")
         
-        # Test için 2, gerçekte 10+ yapılabilir
-        if attempts >= 2: 
+        # 3. denemede giriş başarısı (2 başarısız denemeden sonra)
+        if attempts >= 3: 
             print(f"[*] SSH Access Granted for {username} [SID: {self.session_id}]")
             return paramiko.AUTH_SUCCESSFUL
         

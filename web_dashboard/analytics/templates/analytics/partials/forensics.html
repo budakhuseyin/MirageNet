@@ -12,21 +12,19 @@
     <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #12233D; padding-bottom: 20px; margin-bottom: 20px;">
         <div>
             <h3 style="color: #c9d1d9; margin: 0; display: flex; align-items: center; gap: 10px;">
-                <i class="fas fa-file-shield" style="color: #bc8cff;"></i> Forensic Report: {{ session_id }}
+                <i class="fa-solid fa-file-shield" style="color: #bc8cff;"></i> Forensic Report: {{ session_id }}
             </h3>
             <div style="color: #8b949e; margin-top: 5px; font-family: Consolas, monospace;">Target IP: <span style="color: #58a6ff;">{{ ip_address }}</span></div>
         </div>
         <div>
-            <button class="nav-btn" 
-                onclick="window.open('/session/{{ session_id }}/export/pdf/?auto=1', '_blank')"
-                style="background: rgba(188, 140, 255, 0.1); border: 1px solid #bc8cff; color: #bc8cff; padding: 8px 16px; border-radius: 6px; cursor: pointer;">
-                <i class="fas fa-download"></i> Export PDF
-            </button>
-            <button class="nav-btn"
-                onclick="window.location.href='/session/{{ session_id }}/export/json/'"
-                style="background: rgba(88, 166, 255, 0.1); border: 1px solid #58a6ff; color: #58a6ff; padding: 8px 16px; border-radius: 6px; margin-left: 10px; cursor: pointer;">
-                <i class="fas fa-code"></i> Export JSON
-            </button>
+            <a href="{% url 'export_session_pdf' session_id %}?auto=1" target="_blank" class="nav-btn" 
+                style="background: rgba(188, 140, 255, 0.1); border: 1px solid #bc8cff; color: #bc8cff; padding: 8px 16px; border-radius: 6px; cursor: pointer; text-decoration: none; display: inline-block;">
+                <i class="fa-solid fa-download"></i> Export PDF
+            </a>
+            <a href="{% url 'export_session_json' session_id %}" class="nav-btn"
+                style="background: rgba(88, 166, 255, 0.1); border: 1px solid #58a6ff; color: #58a6ff; padding: 8px 16px; border-radius: 6px; margin-left: 10px; cursor: pointer; text-decoration: none; display: inline-block;">
+                <i class="fa-solid fa-code"></i> Export JSON
+            </a>
         </div>
     </div>
 
@@ -36,16 +34,16 @@
             <div style="background: #0A1526; border: 1px solid #1B3358; border-radius: 6px; padding: 15px; margin-bottom: 15px;">
                 <h6 style="color: #8b949e; font-size: 0.8rem; text-transform: uppercase;">Behavioral Categorization</h6>
                 <div class="{% if 'Malware' in behavior %}text-malware{% elif 'Brute' in behavior %}text-brute{% else %}text-other{% endif %}" style="font-weight: bold; font-size: 1.1rem; margin-top: 5px;">
-                    <i class="fas fa-biohazard"></i> {{ behavior }}
+                    <i class="fa-solid fa-biohazard"></i> {{ behavior }}
                 </div>
             </div>
-
+            
             <div style="background: #0A1526; border: 1px solid #1B3358; border-radius: 6px; padding: 15px;">
                 <h6 style="color: #8b949e; font-size: 0.8rem; text-transform: uppercase; margin-bottom: 15px;">Threat Intelligence</h6>
                 
                 <div style="margin-bottom: 15px;">
                     <span style="color: #c9d1d9; font-size: 0.85rem;">IP Reputation:</span><br>
-                    <span class="{% if 'Critical' in reputation %}text-malware{% else %}text-other{% endif %}" style="font-weight: 500;"><i class="fas fa-skull"></i> {{ reputation }}</span>
+                    <span class="{% if 'Critical' in reputation %}text-malware{% else %}text-other{% endif %}" style="font-weight: 500;"><i class="fa-solid fa-skull"></i> {{ reputation }}</span>
                 </div>
                 
                 <div>
@@ -61,7 +59,7 @@
             {% if payloads %}
             <div style="background: #0A1526; border: 1px solid #ff7b72; border-radius: 6px; padding: 15px; margin-bottom: 20px;">
                 <h6 style="color: #ff7b72; font-size: 0.85rem; text-transform: uppercase; margin-bottom: 10px;">
-                    <i class="fas fa-box-open"></i> Collected Artifacts (Payloads)
+                    <i class="fa-solid fa-box-open"></i> Collected Artifacts (Payloads)
                 </h6>
                 <table style="width: 100%; color: #c9d1d9; font-size: 0.9rem; font-family: Consolas, monospace;">
                     <thead>
@@ -88,14 +86,14 @@
 
             <div style="background: #0A1526; border: 1px solid #1B3358; border-radius: 6px; padding: 15px;">
                 <h6 style="color: #8b949e; font-size: 0.85rem; text-transform: uppercase; margin-bottom: 15px;">
-                    <i class="fas fa-stream"></i> Key Execution Timeline
+                    <i class="fa-solid fa-layer-group"></i> Key Execution Timeline
                 </h6>
                 <div style="font-family: Consolas, monospace; font-size: 0.9rem; max-height: 300px; overflow-y: auto;">
                     {% for log in logs %}
                         {% if log.event_data %}
-                        <div class="{% if log.event_data in dangerous_commands %}border-malware{% else %}border-normal{% endif %}" style="margin-bottom: 8px; padding-left: 10px;">
+                        <div class="{% if log.id in dangerous_command_ids %}border-malware{% else %}border-normal{% endif %}" style="margin-bottom: 8px; padding-left: 10px;">
                             <span style="color: #58a6ff; font-size: 0.8rem;">[{{ log.timestamp|date:"H:i:s" }}]</span>
-                            <span class="{% if log.event_data in dangerous_commands %}text-malware{% else %}text-normal{% endif %}" style="margin-left: 5px;">
+                            <span class="{% if log.id in dangerous_command_ids %}text-malware{% else %}text-normal{% endif %}" style="margin-left: 5px;">
                                 {% if log.module == 'SSH-Login' %}
                                     <span style="color: #8b949e;">Auth Attempt:</span> {{ log.event_data }}
                                 {% else %}

@@ -104,8 +104,12 @@ class HoneypotHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
             )
 
         else:
-            self._set_headers(404, session_id=session_id)
-            self.wfile.write(b"<h1>404 Not Found</h1>")
+            # Catch-all: Redirect unknown traffic to the WP login decoy
+            self.send_response(302)
+            self.send_header('Location', '/wp-login.php')
+            self.send_header('Set-Cookie', f'mnet_sid={session_id}; Path=/; HttpOnly')
+            self.end_headers()
+            print(f"[*] Catch-all redirect: {self.client_address[0]} -> /wp-login.php (was: {self.path})")
 
     def do_POST(self):
         session_id = self.get_or_create_session()
@@ -135,8 +139,8 @@ class HoneypotHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
             
             attempt_count = get_attempt_count(self.client_address[0], session_id, "HTTP-WP-Login")     
             
-            # SSH tarafı ile mantığı 2. denemede girebilecek şekilde eşitledik (0 endeksinden >=1)
-            if attempt_count >= 1: 
+            # 3. denemede giriş başarısı (2 başarısız denemeden sonra)
+            if attempt_count >= 2: 
                 # Başarılı Giriş Logu
                 log_attack(
                     ip_address=self.client_address[0], port=80, module="HTTP-WP-Login", 
@@ -188,6 +192,13 @@ class HoneypotHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
             )
             self._set_headers(200, session_id=session_id)
             self.wfile.write(b"<h1>File edited successfully.</h1> <a href='/wp-admin/theme-editor.php'>Go back</a>")
+
+        else:
+            # Catch-all for POST
+            self.send_response(302)
+            self.send_header('Location', '/wp-login.php')
+            self.send_header('Set-Cookie', f'mnet_sid={session_id}; Path=/; HttpOnly')
+            self.end_headers()
 
 with socketserver.ThreadingTCPServer(("0.0.0.0", PORT), HoneypotHTTPRequestHandler) as httpd:
     print(f"[*] MirageNet HTTP Sensor listening on Port: {PORT}")

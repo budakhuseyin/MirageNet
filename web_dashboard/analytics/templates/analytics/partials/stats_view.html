@@ -96,7 +96,7 @@
             <select name="range" 
                     class="form-select form-select-sm bg-dark text-light border-secondary" 
                     style="width: 150px; background-color: #0A1526 !important; border-color: #1B3358 !important;"
-                    hx-get="/view/stats/" 
+                    hx-get="{% url 'stats_view' %}" 
                     hx-target="#main-content" 
                     hx-trigger="change">
                 <option value="1h" {% if selected_range == '1h' %}selected{% endif %}>Last 1 Hour</option>
@@ -112,7 +112,7 @@
     </div>
 
     <!-- 1. Genel Durum Paneli (Sadece bu kisim her 3 saniyede bir guncellenir) -->
-    <div id="stats-summary-cards" class="row g-3" hx-get="/view/stats/?range={{ selected_range }}" hx-trigger="every 3s" hx-select="#stats-summary-cards" hx-swap="outerHTML">
+    <div id="stats-summary-cards" class="row g-3" hx-get="{% url 'stats_view' %}?range={{ selected_range }}" hx-trigger="every 3s" hx-select="#stats-summary-cards" hx-swap="outerHTML">
         <div class="col-md-3">
             <div class="stat-card">
                 <h6>Total Intrusion Events</h6>

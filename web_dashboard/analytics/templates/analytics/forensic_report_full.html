@@ -81,9 +81,9 @@
                     <div class="terminal-box mt-3">
                         {% for log in logs %}
                             {% if log.event_data %}
-                            <div class="mb-2 ps-2 {% if log.event_data in dangerous_commands %}border-malware{% else %}border-normal{% endif %}">
+                            <div class="mb-2 ps-2 {% if log.id in dangerous_command_ids %}border-malware{% else %}border-normal{% endif %}">
                                 <span class="text-secondary small">[{{ log.timestamp|date:"H:i:s" }}]</span>
-                                <span class="ms-2 {% if log.event_data in dangerous_commands %}text-malware{% endif %}">
+                                <span class="ms-2 {% if log.id in dangerous_command_ids %}text-malware{% endif %}">
                                     {{ log.event_data }}
                                 </span>
                             </div>

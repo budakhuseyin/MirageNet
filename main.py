@@ -76,7 +76,7 @@ def main():
     
     print("-" * 50)
     print("\n[+] ALL SENSORS AND DASHBOARD ARE RUNNING!")
-    print("[+] Access Dashboard at: http://127.0.0.1:8000")
+    print("[+] Access Mirage Control Center at: http://127.0.0.1:8000/mirage-control-center/")
     print("[!] Press Ctrl+C to stop all services cleanly.\n")
     print("==================================================")
     
